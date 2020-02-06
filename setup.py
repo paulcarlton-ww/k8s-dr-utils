@@ -4,7 +4,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="k8s-dr-utils",
+    name="k8sdrutils",
     version="0.0.01",
     author="WW",
     description="Utils related to backup & restore",
