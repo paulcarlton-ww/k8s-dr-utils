@@ -23,6 +23,7 @@ setuptools.setup(
     extras_require={
         'dev': ['pytest',
                 'pytest-cov',
+                'pytest-mock',
                 'pylint'],
     },
     packages=setuptools.find_packages()

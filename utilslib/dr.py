@@ -15,7 +15,7 @@ class Base(object):
     log = None
 
     @lib.retry_wrapper
-    def __init__(self, *args, **kwargs):
+    def __init__(self, **kwargs):
         """
         Constructor
 
@@ -39,7 +39,7 @@ class S3(Base):
     bucket_name = None
 
     @lib.retry_wrapper
-    def __init__(self, *args, **kwargs):
+    def __init__(self, **kwargs):
         """
         Constructor
 
@@ -50,7 +50,7 @@ class S3(Base):
         Returns:
         K8s object
         """
-        super(S3, self).__init__(*args, **kwargs)
+        super(S3, self).__init__(**kwargs)
         if 'client' in kwargs:
             self.client = kwargs.get("client")
         else:
@@ -81,7 +81,7 @@ class S3(Base):
 class Store(S3):
 
     @lib.retry_wrapper
-    def __init__(self, *args, **kwargs):
+    def __init__(self, **kwargs):
         """
         Constructor
 
@@ -92,7 +92,7 @@ class Store(S3):
         Returns:
         Store object
         """
-        super(Store, self).__init__(*args, **kwargs)
+        super(Store, self).__init__(**kwargs)
 
     @lib.timing_wrapper
     @lib.retry_wrapper
@@ -120,7 +120,7 @@ class Store(S3):
 class Retrieve(S3):
 
     @lib.retry_wrapper
-    def __init__(self, *args, **kwargs):
+    def __init__(self, **kwargs):
         """
         Constructor
 
@@ -131,7 +131,7 @@ class Retrieve(S3):
         Returns:
         Retrieve object
         """
-        super(Retrieve, self).__init__(*args, **kwargs)
+        super(Retrieve, self).__init__(**kwargs)
 
     @lib.timing_wrapper
     @lib.retry_wrapper
@@ -182,7 +182,7 @@ class K8s(object):
              'Deployment': ('v1App', 'deployment')}
 
     @lib.retry_wrapper
-    def __init__(self, *args, **kwargs):
+    def __init__(self, **kwargs):
         """
         Constructor
 
@@ -193,12 +193,15 @@ class K8s(object):
         Returns:
         K8s object
         """
-        super(K8s, self).__init__(*args, **kwargs)
+        super(K8s, self).__init__()
 
         # Use in cluster config when deployed to cluster
         config.load_kube_config()
         cfg = config.kube_config.list_kube_config_contexts()
-        self.cluster_name = cfg[0][0]['context']['cluster'].split("/")[1]
+        if 'cluster_name' in kwargs:
+            self.cluster_name = kwargs.get("client")
+        else:
+            self.cluster_name = cfg[0][0]['context']['cluster'].split("/")[1]
         self.v1 = client.CoreV1Api()
         self.v1App = client.AppsV1Api()
         self.v1ext = client.ExtensionsV1beta1Api()

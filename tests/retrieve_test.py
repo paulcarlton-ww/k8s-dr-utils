@@ -1,11 +1,7 @@
-import pytest
-import logging
 import io
 from botocore.response import StreamingBody
 
 from utilslib.dr import Retrieve
-
-LOGGER = logging.getLogger(__name__)
 
 def test_get_bucket_keys_exists(s3_stub):
     prefix = 'cluster2/'
