@@ -2,3 +2,5 @@
 
 # C0301 = long lines
 disable=C0301
+
+disable=missing-docstring
