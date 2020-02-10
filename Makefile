@@ -21,6 +21,9 @@ test: venv
 coverage: venv
 	${PYTHON} -m pytest --cov=utilslib
 
+coverage-report: venv
+	${PYTHON} -m pytest --cov=utilslib --cov-report html
+
 lint: venv
 	${PYTHON} -m pylint --rcfile=pylintrc utilslib
 
