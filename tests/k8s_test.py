@@ -12,7 +12,7 @@ def test_read_namespace(mocker, datadir):
     result = k8s.read_namespace("namespace1")
 
     assert result.kind == "Namespace"
-    assert result.metadata.name == "default"
+    assert result.metadata.name == "kube-system"
 
 def test_list_kind_cm(mocker, datadir):
     k8s = K8s(cluster_name='cluster2')
