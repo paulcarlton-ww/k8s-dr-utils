@@ -1,0 +1,58 @@
+from utilslib.dr import Backup
+from botocore.stub import ANY
+from .testutils import create_response_data, read_file
+
+def test_backup(s3_stub, mocker, datadir):
+    bucket_name = 'test-bucket'
+    namespace = 'kube-system'
+    cluster_name = 'cluster1'
+
+    patched_read_ns = mocker.patch("kubernetes.client.apis.core_v1_api.CoreV1Api.read_namespace", autospec=True)
+    patched_read_ns.return_value = create_response_data(datadir.join('namespace.json').strpath, 'V1Namespace')
+    ns_body = read_file(datadir.join('namespace.json').strpath)
+
+    patched_list_kind_cm = mocker.patch("kubernetes.client.apis.core_v1_api.CoreV1Api.list_namespaced_config_map", autospec=True)
+    patched_list_kind_cm.return_value = create_response_data(datadir.join('configmaplist_single.json').strpath, 'V1ConfigMapList')
+
+    patched_list_kind_lm = mocker.patch("kubernetes.client.apis.core_v1_api.CoreV1Api.list_namespaced_limit_range", autospec=True)
+    patched_list_kind_lm.return_value = create_response_data(datadir.join('limitrangelist_empty.json').strpath, 'V1LimitRangeList')
+
+    patched_list_kind_rq = mocker.patch("kubernetes.client.apis.core_v1_api.CoreV1Api.list_namespaced_resource_quota", autospec=True)
+    patched_list_kind_rq.return_value = create_response_data(datadir.join('resourcequotalist_empty.json').strpath, 'V1ResourceQuotaList')
+
+    patched_list_kind_secret = mocker.patch("kubernetes.client.apis.core_v1_api.CoreV1Api.list_namespaced_secret", autospec=True)
+    patched_list_kind_secret.return_value = create_response_data(datadir.join('secretlist_empty.json').strpath, 'V1SecretList')
+
+    patched_list_kind_service = mocker.patch("kubernetes.client.apis.core_v1_api.CoreV1Api.list_namespaced_service", autospec=True)
+    patched_list_kind_service.return_value = create_response_data(datadir.join('servicelist_empty.json').strpath, 'V1ServiceList')
+
+    patched_list_kind_podtemp = mocker.patch("kubernetes.client.apis.core_v1_api.CoreV1Api.list_namespaced_pod_template", autospec=True)
+    patched_list_kind_podtemp.return_value = create_response_data(datadir.join('podtemplatelist_empty.json').strpath, 'V1PodTemplateList')
+
+    patched_list_kind_deployment = mocker.patch("kubernetes.client.apis.apps_v1_api.AppsV1Api.list_namespaced_deployment", autospec=True)
+    patched_list_kind_deployment.return_value = create_response_data(datadir.join('deploymentlist.json').strpath, 'V1DeploymentList')
+
+    patched = mocker.patch("kubernetes.client.apis.core_v1_api.CoreV1Api.read_namespaced_config_map", autospec=True)
+    patched.return_value = create_response_data(datadir.join('configmap.json').strpath, 'V1ConfigMap')
+
+    s3_stub.add_response(
+        'put_object',
+        expected_params={'Key': 'cluster1/kube-system/Namespace/v1/kube-system.yaml', 'Bucket': bucket_name, 'Body': ANY},
+        service_response={'ETag': '1234abc', 'VersionId': '1234'},
+    )
+    s3_stub.add_response(
+        'put_object',
+        expected_params={'Key': 'cluster1/kube-system/ConfigMap/v1/coredns.yaml', 'Bucket': bucket_name, 'Body': ANY},
+        service_response={'ETag': '1234abc', 'VersionId': '1234'},
+    )
+    s3_stub.add_response(
+        'put_object',
+        expected_params={'Key': 'cluster1/kube-system/Deployment/apps_v1/coredns.yaml', 'Bucket': bucket_name, 'Body': ANY},
+        service_response={'ETag': '1234abc', 'VersionId': '1234'},
+    )
+    s3_stub.activate()
+
+    backup = Backup(client=s3_stub.client, bucket_name=bucket_name, cluster_name=cluster_name)
+    num_stored = backup.save_namespace(namespace)
+    assert num_stored == 3
+    

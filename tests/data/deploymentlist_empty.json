@@ -1,0 +1,10 @@
+{
+    "kind": "DeploymentList",
+    "apiVersion": "apps/v1",
+    "metadata": {
+        "selfLink": "/apis/apps/v1/namespaces/kube-system/deployments",
+        "resourceVersion": "126392"
+    },
+    "items": [
+    ]
+}

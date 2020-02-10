@@ -35,11 +35,9 @@ class Base(object):
 
 
 class S3(Base):
-    client = None
-    bucket_name = None
 
     @lib.retry_wrapper
-    def __init__(self, **kwargs):
+    def __init__(self, *args, **kwargs):
         """
         Constructor
 
@@ -81,7 +79,7 @@ class S3(Base):
 class Store(S3):
 
     @lib.retry_wrapper
-    def __init__(self, **kwargs):
+    def __init__(self, *args, **kwargs):
         """
         Constructor
 
@@ -92,7 +90,7 @@ class Store(S3):
         Returns:
         Store object
         """
-        super(Store, self).__init__(**kwargs)
+        super(Store, self).__init__(*args, **kwargs)
 
     @lib.timing_wrapper
     @lib.retry_wrapper
@@ -120,7 +118,7 @@ class Store(S3):
 class Retrieve(S3):
 
     @lib.retry_wrapper
-    def __init__(self, **kwargs):
+    def __init__(self, *args, **kwargs):
         """
         Constructor
 
@@ -131,7 +129,7 @@ class Retrieve(S3):
         Returns:
         Retrieve object
         """
-        super(Retrieve, self).__init__(**kwargs)
+        super(Retrieve, self).__init__(*args, **kwargs)
 
     @lib.timing_wrapper
     @lib.retry_wrapper
@@ -182,7 +180,7 @@ class K8s(object):
              'Deployment': ('v1App', 'deployment')}
 
     @lib.retry_wrapper
-    def __init__(self, **kwargs):
+    def __init__(self, *args, **kwargs):
         """
         Constructor
 
@@ -199,7 +197,7 @@ class K8s(object):
         config.load_kube_config()
         cfg = config.kube_config.list_kube_config_contexts()
         if 'cluster_name' in kwargs:
-            self.cluster_name = kwargs.get("client")
+            self.cluster_name = kwargs.get("cluster_name")
         else:
             self.cluster_name = cfg[0][0]['context']['cluster'].split("/")[1]
         self.v1 = client.CoreV1Api()
@@ -353,50 +351,47 @@ class K8s(object):
                                        method_object=api)
 
 
-class Backup(K8s, Store):
+class Backup(Base):
 
     custom_resources = []
 
     @lib.retry_wrapper
     def __init__(self, *args, **kwargs):
-        """
-        Constructor
-
-        Args:
-        args     -- posistional arguments
-        kwargs   -- Named arguments
-
-        Returns:
-        Backup object
-        """
         super(Backup, self).__init__(*args, **kwargs)
+
+        self.k8s = K8s(*args, **kwargs)
+        self.store = Store(*args, **kwargs)
 
     def create_key_yaml(self, data):
         d = K8s.process_data(data)
         y = yaml.dump(d)
-        key = "{}/{}/{}/{}/{}.yaml".format(self.cluster_name,
+        key = "{}/{}/{}/{}/{}.yaml".format(self.k8s.cluster_name,
                                 d['metadata']['namespace'] if d["kind"] != "Namespace" else d['metadata']['name'],
                                 d["kind"], d["apiVersion"].replace("/", "_"),
                                 d['metadata']['name'])
-        print("\n# key: {}\n{}".format(key, y))
+        self.log.debug("key: %s, yaml: %s", key, y)
         return key, y
 
     @lib.timing_wrapper
     def get_custom_resources(self):
         resources = []
-        for resource in self.get_custom_resource_definitions():
+        for resource in self.k8s.get_custom_resource_definitions():
             resources.append(resource)
 
     @lib.timing_wrapper
     def save_namespace(self, namespace):
-        ns = self.read_namespace(namespace)
+        count_stored = 0
+        ns = self.k8s.read_namespace(namespace)
         key, data = self.create_key_yaml(ns)
-        self.store_in_bucket(key, data)
+        self.store.store_in_bucket(key, data)
+        count_stored += 1
         for kind in K8s.kinds.keys():
-            for item in self.list_kind(namespace, kind):
-                read_data = self.read_kind(namespace, kind, item.metadata.name)
+            for item in self.k8s.list_kind(namespace, kind):
+                read_data = self.k8s.read_kind(namespace, kind, item.metadata.name)
                 key, data = self.create_key_yaml(read_data)
-                self.store_in_bucket(key, data)
+                self.store.store_in_bucket(key, data)
+                count_stored += 1
+        return count_stored
 
 
 class Restore(K8s, Retrieve):

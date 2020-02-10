@@ -1,12 +1,12 @@
 {
-    "api_version": "v1",
     "kind": "Namespace",
+    "apiVersion": "v1",
     "metadata": {
-        "creation_timestamp": "2020-02-10T8:18:27",
-        "name": "default",
-        "resource_version": "145",
-        "self_link": "/api/v1/namespaces/default",
-        "uid": "32ebc839-f887-4548-8ec7-d359cf957dd3"
+        "name": "kube-system",
+        "selfLink": "/api/v1/namespaces/kube-system",
+        "uid": "8eb06f0a-6ee0-4670-b72e-63d1ce2f7f38",
+        "resourceVersion": "4",
+        "creationTimestamp": "2020-02-10T08:18:36Z"
     },
     "spec": {
         "finalizers": [
