@@ -1,0 +1,54 @@
+{
+    "kind": "ConfigMapList",
+    "apiVersion": "v1",
+    "metadata": {
+        "selfLink": "/api/v1/namespaces/kube-system/configmaps",
+        "resourceVersion": "57041"
+    },
+    "items": [
+        {
+            "metadata": {
+                "name": "coredns",
+                "namespace": "kube-system",
+                "selfLink": "/api/v1/namespaces/kube-system/configmaps/coredns",
+                "uid": "48540eb1-1b95-4eb5-8da7-98014f0e6454",
+                "resourceVersion": "170",
+                "creationTimestamp": "2020-02-10T08:18:38Z"
+            },
+            "data": {
+                "Corefile": ".:53 {\n    errors\n    health {\n       lameduck 5s\n    }\n    ready\n    kubernetes cluster.local in-addr.arpa ip6.arpa {\n       pods insecure\n       fallthrough in-addr.arpa ip6.arpa\n       ttl 30\n    }\n    prometheus :9153\n    forward . /etc/resolv.conf\n    cache 30\n    loop\n    reload\n    loadbalance\n}\n"
+            }
+        },
+        {
+            "metadata": {
+                "name": "kube-proxy",
+                "namespace": "kube-system",
+                "selfLink": "/api/v1/namespaces/kube-system/configmaps/kube-proxy",
+                "uid": "10eba472-ca00-4a95-835d-d4c64abfacc7",
+                "resourceVersion": "178",
+                "creationTimestamp": "2020-02-10T08:18:39Z",
+                "labels": {
+                    "app": "kube-proxy"
+                }
+            },
+            "data": {
+                "config.conf": "apiVersion: kubeproxy.config.k8s.io/v1alpha1\nbindAddress: 0.0.0.0\nclientConnection:\n  acceptContentTypes: \"\"\n  burst: 0\n  contentType: \"\"\n  kubeconfig: /var/lib/kube-proxy/kubeconfig.conf\n  qps: 0\nclusterCIDR: 10.244.0.0/16\nconfigSyncPeriod: 0s\nconntrack:\n  maxPerCore: null\n  min: null\n  tcpCloseWaitTimeout: null\n  tcpEstablishedTimeout: null\nenableProfiling: false\nhealthzBindAddress: \"\"\nhostnameOverride: \"\"\niptables:\n  masqueradeAll: false\n  masqueradeBit: null\n  minSyncPeriod: 0s\n  syncPeriod: 0s\nipvs:\n  excludeCIDRs: null\n  minSyncPeriod: 0s\n  scheduler: \"\"\n  strictARP: false\n  syncPeriod: 0s\nkind: KubeProxyConfiguration\nmetricsBindAddress: \"\"\nmode: \"\"\nnodePortAddresses: null\noomScoreAdj: null\nportRange: \"\"\nudpIdleTimeout: 0s\nwinkernel:\n  enableDSR: false\n  networkName: \"\"\n  sourceVip: \"\"",
+                "kubeconfig.conf": "apiVersion: v1\nkind: Config\nclusters:\n- cluster:\n    certificate-authority: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt\n    server: https://172.17.0.2:6443\n  name: default\ncontexts:\n- context:\n    cluster: default\n    namespace: default\n    user: default\n  name: default\ncurrent-context: default\nusers:\n- name: default\n  user:\n    tokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token"
+            }
+        },
+        {
+            "metadata": {
+                "name": "kubeadm-config",
+                "namespace": "kube-system",
+                "selfLink": "/api/v1/namespaces/kube-system/configmaps/kubeadm-config",
+                "uid": "4c85d1e8-7712-44a0-b9ea-5fb0510ca219",
+                "resourceVersion": "150",
+                "creationTimestamp": "2020-02-10T08:18:37Z"
+            },
+            "data": {
+                "ClusterConfiguration": "apiServer:\n  certSANs:\n  - localhost\n  - 127.0.0.1\n  extraArgs:\n    authorization-mode: Node,RBAC\n  timeoutForControlPlane: 4m0s\napiVersion: kubeadm.k8s.io/v1beta2\ncertificatesDir: /etc/kubernetes/pki\nclusterName: kind\ncontrolPlaneEndpoint: 172.17.0.2:6443\ncontrollerManager:\n  extraArgs:\n    enable-hostpath-provisioner: \"true\"\ndns:\n  type: CoreDNS\netcd:\n  local:\n    dataDir: /var/lib/etcd\nimageRepository: k8s.gcr.io\nkind: ClusterConfiguration\nkubernetesVersion: v1.17.0\nnetworking:\n  dnsDomain: cluster.local\n  podSubnet: 10.244.0.0/16\n  serviceSubnet: 10.96.0.0/12\nscheduler: {}\n",
+                "ClusterStatus": "apiEndpoints:\n  kind-control-plane:\n    advertiseAddress: 172.17.0.2\n    bindPort: 6443\napiVersion: kubeadm.k8s.io/v1beta2\nkind: ClusterStatus\n"
+            }
+        }
+    ]
+}

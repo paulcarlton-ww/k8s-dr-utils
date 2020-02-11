@@ -1,0 +1,9 @@
+{
+    "kind": "PodtemplateList",
+    "apiVersion": "v1",
+    "metadata": {
+        "selfLink": "/api/v1/namespaces/kube-system/podtemplates",
+        "resourceVersion": "57041"
+    },
+    "items": []
+}

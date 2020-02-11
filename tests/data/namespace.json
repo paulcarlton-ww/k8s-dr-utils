@@ -1,0 +1,19 @@
+{
+    "kind": "Namespace",
+    "apiVersion": "v1",
+    "metadata": {
+        "name": "kube-system",
+        "selfLink": "/api/v1/namespaces/kube-system",
+        "uid": "8eb06f0a-6ee0-4670-b72e-63d1ce2f7f38",
+        "resourceVersion": "4",
+        "creationTimestamp": "2020-02-10T08:18:36Z"
+    },
+    "spec": {
+        "finalizers": [
+            "kubernetes"
+        ]
+    },
+    "status": {
+        "phase": "Active"
+    }
+}

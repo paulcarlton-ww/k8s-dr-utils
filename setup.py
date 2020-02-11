@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import setuptools
 
 with open("README.md", "r") as fh:
@@ -11,10 +13,18 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/paulcarlton-ww/k8s-dr-utils",
-    packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.6',
+    install_requires=['boto3', 
+                      'kubernetes'],
+    extras_require={
+        'dev': ['pytest',
+                'pytest-cov',
+                'pytest-mock',
+                'pylint'],
+    },
+    packages=setuptools.find_packages()
 )

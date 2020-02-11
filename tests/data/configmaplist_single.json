@@ -1,0 +1,23 @@
+{
+    "kind": "ConfigMapList",
+    "apiVersion": "v1",
+    "metadata": {
+        "selfLink": "/api/v1/namespaces/kube-system/configmaps",
+        "resourceVersion": "57041"
+    },
+    "items": [
+        {
+            "metadata": {
+                "name": "coredns",
+                "namespace": "kube-system",
+                "selfLink": "/api/v1/namespaces/kube-system/configmaps/coredns",
+                "uid": "48540eb1-1b95-4eb5-8da7-98014f0e6454",
+                "resourceVersion": "170",
+                "creationTimestamp": "2020-02-10T08:18:38Z"
+            },
+            "data": {
+                "Corefile": ".:53 {\n    errors\n    health {\n       lameduck 5s\n    }\n    ready\n    kubernetes cluster.local in-addr.arpa ip6.arpa {\n       pods insecure\n       fallthrough in-addr.arpa ip6.arpa\n       ttl 30\n    }\n    prometheus :9153\n    forward . /etc/resolv.conf\n    cache 30\n    loop\n    reload\n    loadbalance\n}\n"
+            }
+        }
+    ]
+}

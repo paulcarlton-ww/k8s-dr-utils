@@ -1,31 +1,21 @@
 """
 This module contains DR classes
 """
-
-from datetime import date, timedelta
-import os
-import io
-import sys
-import time
-import functools
-
+import logging
 import boto3
 import boto3.s3
 from botocore.config import Config
-import json
 import yaml
-from kubernetes import client, config, utils
+from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 import utilslib.library as lib
-import logging
-import tempfile
 
 
 class Base(object):
     log = None
 
     @lib.retry_wrapper
-    def __init__(self, *args, **kwargs):
+    def __init__(self, **kwargs):
         """
         Constructor
 
@@ -45,9 +35,6 @@ class Base(object):
 
 
 class S3(Base):
-    client = None
-    bucket = None
-    bucket_name = None
 
     @lib.retry_wrapper
     def __init__(self, *args, **kwargs):
@@ -61,13 +48,14 @@ class S3(Base):
         Returns:
         K8s object
         """
-        super(S3, self).__init__(*args, **kwargs)
-        config = Config(connect_timeout=5, retries={'max_attempts': 0})
-        s3 = boto3.resource('s3', config=config)
-        self.client = boto3.client('s3')
+        super(S3, self).__init__(**kwargs)
+        if 'client' in kwargs:
+            self.client = kwargs.get("client")
+        else:
+            config = Config(connect_timeout=5, retries={'max_attempts': 0})
+            self.client = boto3.client('s3',config=config)
+        
         self.bucket_name = kwargs.get("bucket_name", None)
-        if self.bucket_name is not None:
-            self.bucket = s3.Bucket(self.bucket_name)
 
     @staticmethod
     def parse_key(key):
@@ -113,7 +101,18 @@ class Store(S3):
         :param key: The key.
         :param data: The dictionary to store
         """
-        self.bucket.put_object(Key=key, Body=data)
+        return self.client.put_object(Bucket=self.bucket_name, Key=key, Body=data.encode())
+
+    @lib.timing_wrapper
+    @lib.retry_wrapper
+    def delete_from_bucket(self, key):
+        """
+        delete object in s3 with the provided key.
+
+        :param key: the s3 key of the object to delete
+        """
+        return self.client.delete_object(Bucket=self.bucket_name, Key=key)
+        
 
 
 class Retrieve(S3):
@@ -134,30 +133,37 @@ class Retrieve(S3):
 
     @lib.timing_wrapper
     @lib.retry_wrapper
-    def get_s3_namespaces(self, prefix):
+    def get_s3_namespaces(self, clustername):
         """
         retrieve namespace names for provided cluster name prefix.
 
-        :param prefix: The key prefix .
+        :param clustername: the name of the cluster to get the namespaces for
         """
-        result = self.client.list_objects(Bucket=self.bucket_name,
-                                          Prefix="{}/".format(prefix), Delimiter='/')
-        for o in result.get('CommonPrefixes'):
-            cluster_namespace = o.get('Prefix')
-            yield(cluster_namespace.split('/')[1])
+        keys = self.get_bucket_keys(clustername)
+        namespaces = list(map(lambda k: k.split('/')[1], keys))
+        return list(dict.fromkeys(namespaces))
 
     @lib.timing_wrapper
     @lib.retry_wrapper
-    def get_bucket_items(self, prefix):
+    def get_bucket_keys(self, prefix):
         """
         retrieve items in an S3 bucket with the provided prefix.
 
         :param prefix: The key prefix .
         """
+        response = self.client.list_objects_v2(Bucket=self.bucket_name, Prefix=prefix)
+        return list(map(lambda i: i['Key'], response['Contents']))
 
-        for obj in list(self.bucket.objects.filter(Prefix=prefix)):
-            yield(obj.key, obj.get()['Body'].read())
+    @lib.timing_wrapper
+    @lib.retry_wrapper
+    def get_bucket_item(self, key):
+        """
+        retrieve an item from s3 for a particular key
 
+        :param key: they key of the item to get
+        """
+        response = self.client.get_object(Bucket=self.bucket_name, Key=key)
+        return response['Body'].read()
 
 class K8s(object):
     v1 = None
@@ -185,12 +191,15 @@ class K8s(object):
         Returns:
         K8s object
         """
-        super(K8s, self).__init__(*args, **kwargs)
+        super(K8s, self).__init__()
 
         # Use in cluster config when deployed to cluster
         config.load_kube_config()
         cfg = config.kube_config.list_kube_config_contexts()
-        self.cluster_name = cfg[0][0]['context']['cluster'].split("/")[1]
+        if 'cluster_name' in kwargs:
+            self.cluster_name = kwargs.get("cluster_name")
+        else:
+            self.cluster_name = cfg[0][0]['context']['cluster'].split("/")[1]
         self.v1 = client.CoreV1Api()
         self.v1App = client.AppsV1Api()
         self.v1ext = client.ExtensionsV1beta1Api()
@@ -342,50 +351,47 @@ class K8s(object):
                                        method_object=api)
 
 
-class Backup(K8s, Store):
+class Backup(Base):
 
     custom_resources = []
 
     @lib.retry_wrapper
     def __init__(self, *args, **kwargs):
-        """
-        Constructor
-
-        Args:
-        args     -- posistional arguments
-        kwargs   -- Named arguments
-
-        Returns:
-        Backup object
-        """
         super(Backup, self).__init__(*args, **kwargs)
+
+        self.k8s = K8s(*args, **kwargs)
+        self.store = Store(*args, **kwargs)
 
     def create_key_yaml(self, data):
         d = K8s.process_data(data)
         y = yaml.dump(d)
-        key = "{}/{}/{}/{}/{}.yaml".format(self.cluster_name,
+        key = "{}/{}/{}/{}/{}.yaml".format(self.k8s.cluster_name,
                                 d['metadata']['namespace'] if d["kind"] != "Namespace" else d['metadata']['name'],
                                 d["kind"], d["apiVersion"].replace("/", "_"),
                                 d['metadata']['name'])
-        print("\n# key: {}\n{}".format(key, y))
+        self.log.debug("key: %s, yaml: %s", key, y)
         return key, y
 
     @lib.timing_wrapper
     def get_custom_resources(self):
         resources = []
-        for resource in self.get_custom_resource_definitions():
+        for resource in self.k8s.get_custom_resource_definitions():
             resources.append(resource)
 
     @lib.timing_wrapper
     def save_namespace(self, namespace):
-        ns = self.read_namespace(namespace)
+        count_stored = 0
+        ns = self.k8s.read_namespace(namespace)
         key, data = self.create_key_yaml(ns)
-        self.store_in_bucket(key, data)
+        self.store.store_in_bucket(key, data)
+        count_stored += 1
         for kind in K8s.kinds.keys():
-            for item in self.list_kind(namespace, kind):
-                read_data = self.read_kind(namespace, kind, item.metadata.name)
+            for item in self.k8s.list_kind(namespace, kind):
+                read_data = self.k8s.read_kind(namespace, kind, item.metadata.name)
                 key, data = self.create_key_yaml(read_data)
-                self.store_in_bucket(key, data)
+                self.store.store_in_bucket(key, data)
+                count_stored += 1
+        return count_stored
 
 
 class Restore(K8s, Retrieve):
@@ -437,12 +443,12 @@ class Restore(K8s, Retrieve):
                 for kind in Restore.kind_order:
                     prefix = "{}/{}/{}".format(clusterName, namespace, kind)
 
-                    for key, data in self.get_bucket_items(prefix):
+                    for key in self.get_bucket_keys(prefix):
                         _, _, _, name = S3.parse_key(key)
                         if Restore.exclude_check(namespace, kind, name):
                             self.log.info("skipping: %s/%s in namespace %s", kind, name, namespace)
                             continue
-
+                        data = self.get_bucket_item(key)
                         self.log.info("processing %s", key)
                         self.log.debug("%s", data.decode("utf-8"))
                         self.strategy.process_resource(data)
