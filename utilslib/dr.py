@@ -202,23 +202,20 @@ class K8s(object):
         Returns:
         K8s object
         """
-        super(K8s, self).__init__()
-
         if 'kube_config' in kwargs:
             config.load_kube_config(config_file=kwargs.get("kube_config"))
         else:
-            config.load_kube_config()
-
-        if 'cluster_name' in kwargs:
-            self.cluster_name = kwargs.get("cluster_name")
-        else:
-            cfg = config.kube_config.list_kube_config_contexts()
-            self.cluster_name = cfg[0][0]['context']['cluster'].split("/")[1]
+            config.load_incluster_config()
 
         self.v1 = client.CoreV1Api()
         self.v1App = client.AppsV1Api()
         self.v1ext = client.ExtensionsV1beta1Api()
         self.v1beta1 = client.ApiextensionsV1beta1Api()
+
+        if 'cluster_name' in kwargs:
+            self.cluster_info = { "cluster.name": kwargs.get('cluster_name')}  
+        else:
+            self.cluster_info = self.get_cluster_info()
 
     @staticmethod
     def strip_nulls(data):
@@ -367,6 +364,17 @@ class K8s(object):
                                        method_prefix="replace_namespaced_",
                                        method_object=api)
 
+    @lib.timing_wrapper
+    @lib.retry_wrapper
+    def get_cluster_info(self):
+        read_data = self.read_kind("kube-system", "ConfigMap", "cluster-data")
+        api, method = self.get_api_method("ConfigMap")
+        data = lib.dynamic_method_call("cluster-data", "kube-system",
+                                       method_text=method,
+                                       method_prefix="read_namespaced_",
+                                       method_object=api)
+        return K8s.process_data(data)["data"]
+        
 
 class Backup(Base):
 
@@ -383,7 +391,7 @@ class Backup(Base):
     def create_key_yaml(self, data):
         d = K8s.process_data(data)
         y = yaml.dump(d)
-        key = "{}/{}/{}/{}/{}.yaml".format(self.k8s.cluster_name,
+        key = "{}/{}/{}/{}/{}.yaml".format(self.k8s.cluster_info["cluster.name"],
                                 d['metadata']['namespace'] if d["kind"] != "Namespace" else d['metadata']['name'],
                                 d["kind"], d["apiVersion"].replace("/", "_"),
                                 d['metadata']['name'])
@@ -463,7 +471,7 @@ class Backup(Base):
         """
         keys_deleted = []
 
-        prefix = "{}/{}".format(self.k8s.cluster_name, namespace)
+        prefix = "{}/{}".format(self.k8s.cluster_info["cluster.name"], namespace)
         for key in self.retrieve.get_bucket_keys(prefix):
             if key not in existing_keys:
                 self.log.info("key %s doesn't exist in k8s, deleting from s3", key)
