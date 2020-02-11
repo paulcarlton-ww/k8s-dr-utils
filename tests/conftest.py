@@ -1,3 +1,4 @@
+# pylint: skip-file
 import os
 from distutils import dir_util
 import pytest
