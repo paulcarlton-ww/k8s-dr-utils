@@ -296,11 +296,10 @@ class K8s(object):
     @lib.timing_wrapper
     @lib.k8s_chunk_wrapper
     @lib.retry_wrapper
-    def list_namespaces(self, **kwargs):
-        if 'next' in kwargs:
-            kwargs['_continue'] = kwargs['next']
-            del kwargs['next']
-        return self.v1.list_namespace(**kwargs)
+    def list_namespaces(self, limit=100, next='', label_selector=''):
+        return self.v1.list_namespace(limit=limit, _continue=next, 
+                                      label_selector=label_selector)
+
 
     @lib.timing_wrapper
     @lib.retry_wrapper
