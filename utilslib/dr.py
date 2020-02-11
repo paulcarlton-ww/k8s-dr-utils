@@ -1,6 +1,7 @@
 """
 This module contains DR classes
 """
+import os
 import logging
 import boto3
 import boto3.s3
@@ -202,6 +203,7 @@ class K8s(object):
         Returns:
         K8s object
         """
+
         if 'kube_config' in kwargs:
             config.load_kube_config(config_file=kwargs.get("kube_config"))
         else:
