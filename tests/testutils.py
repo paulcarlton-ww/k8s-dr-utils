@@ -1,3 +1,4 @@
+# pylint: skip-file
 from urllib3 import HTTPResponse
 from kubernetes.client import ApiClient
 

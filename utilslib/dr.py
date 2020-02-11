@@ -10,8 +10,13 @@ from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 import utilslib.library as lib
 
-
 class Base(object):
+    """Base class that provides a logger
+
+    Arguments:
+        logname (str) -- the name of the logger to use, defaults to __name__
+        loglevel (str) -- the level of logging, defaults to CRITICAL
+    """
     log = None
 
     @lib.retry_wrapper
@@ -35,7 +40,8 @@ class Base(object):
 
 
 class S3(Base):
-
+    """Base class for S3
+    """
     @lib.retry_wrapper
     def __init__(self, *args, **kwargs):
         """
@@ -48,13 +54,13 @@ class S3(Base):
         Returns:
         K8s object
         """
-        super(S3, self).__init__(**kwargs)
+        super(S3, self).__init__(*args, **kwargs)
         if 'client' in kwargs:
             self.client = kwargs.get("client")
         else:
-            config = Config(connect_timeout=5, retries={'max_attempts': 0})
-            self.client = boto3.client('s3',config=config)
-        
+            kube_config = Config(connect_timeout=5, retries={'max_attempts': 0})
+            self.client = boto3.client('s3', config=kube_config)
+
         self.bucket_name = kwargs.get("bucket_name", None)
 
     @staticmethod
@@ -77,7 +83,8 @@ class S3(Base):
 
 
 class Store(S3):
-
+    """Class to store or remove items from S3
+    """
     @lib.retry_wrapper
     def __init__(self, *args, **kwargs):
         """
@@ -112,11 +119,12 @@ class Store(S3):
         :param key: the s3 key of the object to delete
         """
         return self.client.delete_object(Bucket=self.bucket_name, Key=key)
-        
+
 
 
 class Retrieve(S3):
-
+    """Retrieve keys and items from S3
+    """
     @lib.retry_wrapper
     def __init__(self, *args, **kwargs):
         """
@@ -166,18 +174,20 @@ class Retrieve(S3):
         return response['Body'].read()
 
 class K8s(object):
+    """A class to perform actions against Kubernetes
+    """
     v1 = None
     v1App = None
     v1ext = None
     cluster_name = None
 
-    kinds = {'ConfigMap': ('v1', 'config_map'),
-             'LimitRange': ('v1', 'limit_range'),
-             'ResourceQuota': ('v1', 'resource_quota'),
-             'Secret': ('v1', 'secret'),
-             'Service': ('v1', 'service'),
-             'PodTemplate': ('v1', 'pod_template'),
-             'Deployment': ('v1App', 'deployment')}
+    supported_kinds = {'ConfigMap': ('v1', 'config_map'),
+                       'LimitRange': ('v1', 'limit_range'),
+                       'ResourceQuota': ('v1', 'resource_quota'),
+                       'Secret': ('v1', 'secret'),
+                       'Service': ('v1', 'service'),
+                       'PodTemplate': ('v1', 'pod_template'),
+                       'Deployment': ('v1App', 'deployment')}
 
     @lib.retry_wrapper
     def __init__(self, *args, **kwargs):
@@ -195,10 +205,10 @@ class K8s(object):
 
         # Use in cluster config when deployed to cluster
         config.load_kube_config()
-        cfg = config.kube_config.list_kube_config_contexts()
         if 'cluster_name' in kwargs:
             self.cluster_name = kwargs.get("cluster_name")
         else:
+            cfg = config.kube_config.list_kube_config_contexts()
             self.cluster_name = cfg[0][0]['context']['cluster'].split("/")[1]
         self.v1 = client.CoreV1Api()
         self.v1App = client.AppsV1Api()
@@ -245,8 +255,8 @@ class K8s(object):
                 return data
             if "attribute_map" in data:
                 d = {}
-                map = data.get("attribute_map", {})
-                for k, v in map.items():
+                attr_map = data.get("attribute_map", {})
+                for k, v in attr_map.items():
                     value = data.pop(k, None)
                     if value:
                         d[v] = value
@@ -269,8 +279,8 @@ class K8s(object):
 
     def get_api_method(self, kind):
         try:
-            api_name = K8s.kinds.get(kind)[0]
-            method = K8s.kinds.get(kind)[1]
+            api_name = K8s.supported_kinds.get(kind)[0]
+            method = K8s.supported_kinds.get(kind)[1]
             api = getattr(self, api_name)
         except Exception as e:
             raise e
@@ -279,7 +289,7 @@ class K8s(object):
     @lib.timing_wrapper
     @lib.k8s_chunk_wrapper
     @lib.retry_wrapper
-    def list_custom_resource_definition(self, limit=100, next=''):
+    def list_custom_resource_definition(self):
         return self.v1beta1.list_custom_resource_definition()
 
     @lib.timing_wrapper
@@ -361,6 +371,7 @@ class Backup(Base):
 
         self.k8s = K8s(*args, **kwargs)
         self.store = Store(*args, **kwargs)
+        self.retrieve = Retrieve(*args, **kwargs)
 
     def create_key_yaml(self, data):
         d = K8s.process_data(data)
@@ -380,18 +391,80 @@ class Backup(Base):
 
     @lib.timing_wrapper
     def save_namespace(self, namespace):
-        count_stored = 0
+        """Save a namespace to S3
+
+        This method will enumerate all resources in a namespace
+        and then backup the yaml to S3. It will also delete
+        any yaml in S3 for resources that no longer exist in
+        the namespace.
+        
+        Arguments:
+            namespace {str} -- the kubernetes namespace to backup
+        
+        Returns:
+            [int] -- number of resources backuped to S3
+            [int] -- number of resources deleted from s3
+        """
+        if not isinstance(namespace, str):
+            raise Exception("namespace must be a string")
+
+        if namespace == "":
+            raise Exception("you must supply a namespace, empty string supplied")
+
+        keys_stored = self._save_to_s3(namespace)
+        keys_deleted = self._handle_deleted_resources(keys_stored, namespace)
+
+        return len(keys_stored), len(keys_deleted)
+
+    @lib.timing_wrapper
+    def _save_to_s3(self, namespace):
+        """Save Kubernetes resources for a namespace to S3
+        
+        Arguments:
+            namespace {str} -- the kubernetes namespace to backup
+        
+        Returns:
+            [str[]] -- an array of keys for the objects stored
+        """
+        keys = []
+        
+        # Save the namespace first
         ns = self.k8s.read_namespace(namespace)
         key, data = self.create_key_yaml(ns)
         self.store.store_in_bucket(key, data)
-        count_stored += 1
-        for kind in K8s.kinds.keys():
+        keys.append(key)
+
+        # Save the kinds that are supported
+        for kind in K8s.supported_kinds.keys():
             for item in self.k8s.list_kind(namespace, kind):
                 read_data = self.k8s.read_kind(namespace, kind, item.metadata.name)
                 key, data = self.create_key_yaml(read_data)
                 self.store.store_in_bucket(key, data)
-                count_stored += 1
-        return count_stored
+                keys.append(key)
+        return keys
+
+    @lib.timing_wrapper
+    def _handle_deleted_resources(self, existing_keys, namespace):
+        """Delete any artefacts from S3 for non-existent resources
+        
+        Arguments:
+            existing_keys {str[]} -- an array of the keys for resources that exist in the namespace
+            namespace {str} -- the kubernetes namespace to backup
+
+        Returns:
+            [str[]] -- an array of the keys deleted from the s3 bucket
+        """
+        keys_deleted = []
+
+        prefix = "{}/{}".format(self.k8s.cluster_name, namespace)
+        for key in self.retrieve.get_bucket_keys(prefix):
+            if key not in existing_keys:
+                self.log.info("key %s doesn't exist in k8s, deleting from s3", key)
+                self.store.delete_from_bucket(key)
+                keys_deleted.append(key)
+            else:
+                self.log.debug("key %s exists in k8s, no action")
+        return keys_deleted
 
 
 class Restore(K8s, Retrieve):
@@ -454,7 +527,7 @@ class Restore(K8s, Retrieve):
                         self.strategy.process_resource(data)
             except ApiException as err:
                 if err.status == 409:
-                    self.log.warn("resource already exists, skipping")
+                    self.log.warning("resource already exists, skipping")
                 else:
                     raise
             self.strategy.finish_namespace()

@@ -1,3 +1,4 @@
+# pylint: skip-file
 import io
 from botocore.response import StreamingBody
 

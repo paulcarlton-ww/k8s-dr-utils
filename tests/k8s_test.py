@@ -1,3 +1,4 @@
+# pylint: skip-file
 from utilslib.dr import K8s
 from .testutils import create_response_data
 
