@@ -469,7 +469,7 @@ class Backup(Base):
         return keys_deleted
 
 
-class Restore(K8s, Retrieve):
+class Restore(Base):
     kind_order = ['Namespace',
                   'LimitRange',
                   'ResourceQuota',
@@ -481,9 +481,12 @@ class Restore(K8s, Retrieve):
     exclude_list = [("default", "Service", "kubernetes"),
                     ("default", "Endpoints", "kubernetes")]
 
-    @lib.retry_wrapper
-    def __init__(self, bucket_name, strategy, log_level):
-        super(Restore, self).__init__(bucket_name=bucket_name, loglevel=log_level)
+    def __init__(self, bucket_name, strategy, *args, **kwargs):
+        super(Restore, self).__init__(*args, **kwargs)
+
+        self.k8s = K8s(*args, **kwargs)
+        self.retrieve = Retrieve(bucket_name=bucket_name, *args, **kwargs)
+
         self.bucket_name = bucket_name
         self.strategy = strategy
 
@@ -498,15 +501,16 @@ class Restore(K8s, Retrieve):
     @lib.timing_wrapper
     def remove_if_exists(self, namespace, kind, name):
         try:
-            self.read_kind(namespace, kind, name)
+            self.k8s.read_kind(namespace, kind, name)
         except Exception:
             return
-        self.delete_kind(namespace, kind, name)
+        self.k8s.delete_kind(namespace, kind, name)
 
     @lib.timing_wrapper
     def restore_namespaces(self, clusterName, namespacesToRestore="*"):
         namespace = []
-        for namespace in self.get_s3_namespaces(clusterName):
+        num_processed = 0
+        for namespace in self.retrieve.get_s3_namespaces(clusterName):
             if namespacesToRestore != "*" and namespace not in namespacesToRestore:
                 self.log.info("skipping namespace: %s", namespace)
                 continue
@@ -518,18 +522,20 @@ class Restore(K8s, Retrieve):
                 for kind in Restore.kind_order:
                     prefix = "{}/{}/{}".format(clusterName, namespace, kind)
 
-                    for key in self.get_bucket_keys(prefix):
+                    for key in self.retrieve.get_bucket_keys(prefix):
                         _, _, _, name = S3.parse_key(key)
                         if Restore.exclude_check(namespace, kind, name):
                             self.log.info("skipping: %s/%s in namespace %s", kind, name, namespace)
                             continue
-                        data = self.get_bucket_item(key)
+                        data = self.retrieve.get_bucket_item(key)
                         self.log.info("processing %s", key)
                         self.log.debug("%s", data.decode("utf-8"))
                         self.strategy.process_resource(data)
+                        num_processed += 1
             except ApiException as err:
                 if err.status == 409:
                     self.log.warning("resource already exists, skipping")
                 else:
                     raise
             self.strategy.finish_namespace()
+        return num_processed
