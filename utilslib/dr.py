@@ -174,7 +174,7 @@ class Retrieve(S3):
         response = self.client.get_object(Bucket=self.bucket_name, Key=key)
         return response['Body'].read()
 
-class K8s(object):
+class K8s(Base):
     """A class to perform actions against Kubernetes
     """
     v1 = None
@@ -203,12 +203,14 @@ class K8s(object):
         Returns:
         K8s object
         """
+        super(K8s, self).__init__(*args, **kwargs)
 
         kube_config = kwargs["kube_config"] if "kube_config" in kwargs else ""
-
         if kube_config and len(kube_config) > 0:
+            self.log.info("using kube_config=%s", kube_config)
             config.load_kube_config(config_file=kube_config)
         else:
+            self.log.info("no kube_config, running in-cluster")
             config.load_incluster_config()
 
         self.v1 = client.CoreV1Api()
@@ -217,8 +219,10 @@ class K8s(object):
         self.v1beta1 = client.ApiextensionsV1beta1Api()
 
         if 'cluster_name' in kwargs:
+            self.log.info("using expliciti cluster_name=%s",  kwargs.get('cluster_name'))
             self.cluster_info = { "cluster.name": kwargs.get('cluster_name')}  
         else:
+            self.log.info("getting cluster info")
             self.cluster_info = self.get_cluster_info()
 
     @staticmethod
@@ -430,9 +434,12 @@ class Backup(Base):
         if namespace == "":
             raise Exception("you must supply a namespace, empty string supplied")
 
+        self.log.info("saving namespace %s", namespace)
+
         keys_stored = self._save_to_s3(namespace)
         keys_deleted = self._handle_deleted_resources(keys_stored, namespace)
 
+        self.log.info("saved %d resources to S3 and deleted %d resources from S3", len(keys_stored), len(keys_deleted))
         return len(keys_stored), len(keys_deleted)
 
     @lib.timing_wrapper
@@ -448,16 +455,20 @@ class Backup(Base):
         keys = []
 
         # Save the namespace first
+        self.log.debug("reading namespace %s", namespace)
         ns = self.k8s.read_namespace(namespace)
         key, data = self.create_key_yaml(ns)
+        self.log.debug("storing namespace in S3 with key %s", key)
         self.store.store_in_bucket(key, data)
         keys.append(key)
 
         # Save the kinds that are supported
         for kind in K8s.supported_kinds.keys():
             for item in self.k8s.list_kind(namespace, kind):
+                self.log.debug("reading kind %s with name %s in namespace %s", kind, item.metadata.name, namespace)
                 read_data = self.k8s.read_kind(namespace, kind, item.metadata.name)
                 key, data = self.create_key_yaml(read_data)
+                self.log.debug("storing %s in S3 with key %s", kind, key)
                 self.store.store_in_bucket(key, data)
                 keys.append(key)
         return keys
