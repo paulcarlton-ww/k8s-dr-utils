@@ -44,3 +44,13 @@ def test_read_kind_cm(mocker, datadir):
     assert result.kind == "ConfigMap"
     assert result.metadata.name == "coredns"
     assert result.metadata.namespace == "kube-system"
+    
+def test_get_cluster_info(mocker, datadir):
+    k8s = create_k8s(datadir)
+
+    patched = mocker.patch("kubernetes.client.apis.core_v1_api.CoreV1Api.read_namespaced_config_map", autospec=True)
+    patched.return_value = create_response_data(datadir.join('clusterdata.json').strpath, 'V1ConfigMap')
+
+    result = k8s.get_cluster_info()
+    assert result["cluster.set"] == "default"
+    assert result["cluster.name"] == "cluster2"
