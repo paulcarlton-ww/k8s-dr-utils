@@ -33,8 +33,11 @@ def test_backup(s3_stub, mocker, datadir):
     patched_list_kind_deployment = mocker.patch("kubernetes.client.apis.apps_v1_api.AppsV1Api.list_namespaced_deployment", autospec=True)
     patched_list_kind_deployment.return_value = create_response_data(datadir.join('deploymentlist.json').strpath, 'V1DeploymentList')
 
-    patched = mocker.patch("kubernetes.client.apis.core_v1_api.CoreV1Api.read_namespaced_config_map", autospec=True)
-    patched.return_value = create_response_data(datadir.join('configmap.json').strpath, 'V1ConfigMap')
+    patched_read_cm = mocker.patch("kubernetes.client.apis.core_v1_api.CoreV1Api.read_namespaced_config_map", autospec=True)
+    patched_read_cm.return_value = create_response_data(datadir.join('configmap.json').strpath, 'V1ConfigMap')
+
+    patched_read_deployment = mocker.patch("kubernetes.client.apis.apps_v1_api.AppsV1Api.read_namespaced_deployment", autospec=True)
+    patched_read_deployment.return_value = create_response_data(datadir.join('deployment.json').strpath, 'V1Deployment')
 
     s3_stub.add_response(
         'put_object',
@@ -63,7 +66,7 @@ def test_backup(s3_stub, mocker, datadir):
     )
     s3_stub.activate()
 
-    backup = Backup(client=s3_stub.client, bucket_name=bucket_name, cluster_name=cluster_name)
+    backup = Backup(client=s3_stub.client, bucket_name=bucket_name, cluster_name=cluster_name, kube_config=datadir.join('kubeconfig').strpath)
     num_stored, num_deleted = backup.save_namespace(namespace)
     assert num_stored == 3
     assert num_deleted == 1

@@ -113,7 +113,7 @@ def test_restore_all_namespaces(s3_stub, mocker, datadir):
 
     strategy = NullStrategy(cluster_name)
 
-    restore = Restore(bucket_name,strategy,client=s3_stub.client,cluster_name=cluster_name)
+    restore = Restore(bucket_name,strategy,client=s3_stub.client,cluster_name=cluster_name, kube_config=datadir.join('kubeconfig').strpath)
     num_processed = restore.restore_namespaces(cluster_name)
 
     assert num_processed == 2
@@ -179,7 +179,7 @@ def test_restore_single_namespaces(s3_stub, mocker, datadir):
 
     strategy = NullStrategy(cluster_name)
 
-    restore = Restore(bucket_name,strategy,client=s3_stub.client,cluster_name=cluster_name)
+    restore = Restore(bucket_name,strategy, client=s3_stub.client, cluster_name=cluster_name, kube_config=datadir.join('kubeconfig').strpath)
     num_processed = restore.restore_namespaces(cluster_name,namespace)
 
     assert num_processed == 1
