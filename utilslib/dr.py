@@ -33,6 +33,7 @@ class Base(object):
         Base object
         """
         super(Base, self).__init__()
+
         log_name = kwargs["logname"] if "logname" in kwargs else __name__
         self.log = logging.getLogger(log_name)
         log_level = kwargs["loglevel"] if "loglevel" in kwargs else "CRITICAL"
@@ -56,6 +57,8 @@ class S3(Base):
         K8s object
         """
         super(S3, self).__init__(*args, **kwargs)
+        self.log.debug("S3 init", extra=dict(**kwargs))
+
         if 'client' in kwargs:
             self.client = kwargs.get("client")
         else:
@@ -99,6 +102,7 @@ class Store(S3):
         Store object
         """
         super(Store, self).__init__(*args, **kwargs)
+        self.log.debug("Store init", extra=dict(**kwargs))
 
     @lib.timing_wrapper
     @lib.retry_wrapper
@@ -139,6 +143,7 @@ class Retrieve(S3):
         Retrieve object
         """
         super(Retrieve, self).__init__(*args, **kwargs)
+        self.log.debug("Retrieve init", extra=dict(**kwargs))
 
     @lib.timing_wrapper
     @lib.retry_wrapper
@@ -204,6 +209,8 @@ class K8s(Base):
         K8s object
         """
         super(K8s, self).__init__(*args, **kwargs)
+
+        self.log.debug("K8s init", extra=dict(**kwargs))
 
         kube_config = kwargs["kube_config"] if "kube_config" in kwargs else ""
         if kube_config and len(kube_config) > 0:
@@ -392,6 +399,8 @@ class Backup(Base):
     def __init__(self, *args, **kwargs):
         super(Backup, self).__init__(*args, **kwargs)
 
+        self.log.debug("Backup init", extra=dict(**kwargs))
+
         self.k8s = K8s(*args, **kwargs)
         self.store = Store(*args, **kwargs)
         self.retrieve = Retrieve(*args, **kwargs)
@@ -511,6 +520,8 @@ class Restore(Base):
 
     def __init__(self, bucket_name, strategy, *args, **kwargs):
         super(Restore, self).__init__(*args, **kwargs)
+
+        self.log.debug("Restore init", extra=dict(**kwargs))
 
         self.k8s = K8s(*args, **kwargs)
         self.retrieve = Retrieve(bucket_name=bucket_name, *args, **kwargs)
