@@ -180,6 +180,7 @@ class K8s(object):
     v1App = None
     v1ext = None
     cluster_name = None
+    kube_config = None
 
     supported_kinds = {'ConfigMap': ('v1', 'config_map'),
                        'LimitRange': ('v1', 'limit_range'),
@@ -203,13 +204,17 @@ class K8s(object):
         """
         super(K8s, self).__init__()
 
-        # Use in cluster config when deployed to cluster
-        config.load_kube_config()
+        if 'kube_config' in kwargs:
+            config.load_kube_config(config_file=kwargs.get("kube_config"))
+        else:
+            config.load_kube_config()
+
         if 'cluster_name' in kwargs:
             self.cluster_name = kwargs.get("cluster_name")
         else:
             cfg = config.kube_config.list_kube_config_contexts()
             self.cluster_name = cfg[0][0]['context']['cluster'].split("/")[1]
+
         self.v1 = client.CoreV1Api()
         self.v1App = client.AppsV1Api()
         self.v1ext = client.ExtensionsV1beta1Api()
@@ -399,10 +404,10 @@ class Backup(Base):
         and then backup the yaml to S3. It will also delete
         any yaml in S3 for resources that no longer exist in
         the namespace.
-        
+
         Arguments:
             namespace {str} -- the kubernetes namespace to backup
-        
+
         Returns:
             [int] -- number of resources backuped to S3
             [int] -- number of resources deleted from s3
@@ -421,15 +426,15 @@ class Backup(Base):
     @lib.timing_wrapper
     def _save_to_s3(self, namespace):
         """Save Kubernetes resources for a namespace to S3
-        
+
         Arguments:
             namespace {str} -- the kubernetes namespace to backup
-        
+
         Returns:
             [str[]] -- an array of keys for the objects stored
         """
         keys = []
-        
+
         # Save the namespace first
         ns = self.k8s.read_namespace(namespace)
         key, data = self.create_key_yaml(ns)

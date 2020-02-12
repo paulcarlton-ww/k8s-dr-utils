@@ -1,11 +1,9 @@
 # pylint: skip-file
 from utilslib.dr import K8s
-from .testutils import create_response_data
+from .testutils import create_response_data, create_k8s
 
 def test_read_namespace(mocker, datadir):
-    k8s = K8s(cluster_name='cluster2')
-
-    test = k8s.read_namespace("kube-system")
+    k8s = create_k8s(datadir)
 
     patched = mocker.patch("kubernetes.client.apis.core_v1_api.CoreV1Api.read_namespace", autospec=True)
     patched.return_value = create_response_data(datadir.join('namespace.json').strpath, 'V1Namespace')
@@ -16,7 +14,7 @@ def test_read_namespace(mocker, datadir):
     assert result.metadata.name == "kube-system"
 
 def test_list_kind_cm(mocker, datadir):
-    k8s = K8s(cluster_name='cluster2')
+    k8s = create_k8s(datadir)
 
     patched = mocker.patch("kubernetes.client.apis.core_v1_api.CoreV1Api.list_namespaced_config_map", autospec=True)
     patched.return_value = create_response_data(datadir.join('configmaplist.json').strpath, 'V1ConfigMapList')
@@ -26,7 +24,7 @@ def test_list_kind_cm(mocker, datadir):
     assert len(result) == 3
 
 def test_list_kind_deployment(mocker, datadir):
-    k8s = K8s(cluster_name='cluster2')
+    k8s = create_k8s(datadir)
 
     patched = mocker.patch("kubernetes.client.apis.apps_v1_api.AppsV1Api.list_namespaced_deployment", autospec=True)
     patched.return_value = create_response_data(datadir.join('deploymentlist.json').strpath, 'V1DeploymentList')
@@ -36,9 +34,7 @@ def test_list_kind_deployment(mocker, datadir):
     assert len(result) == 1
 
 def test_read_kind_cm(mocker, datadir):
-    k8s = K8s(cluster_name='cluster2')
-
-    test = k8s.read_kind("kube-system","ConfigMap","coredns")
+    k8s = create_k8s(datadir)
 
     patched = mocker.patch("kubernetes.client.apis.core_v1_api.CoreV1Api.read_namespaced_config_map", autospec=True)
     patched.return_value = create_response_data(datadir.join('configmap.json').strpath, 'V1ConfigMap')
