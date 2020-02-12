@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="k8sdrutils",
-    version="0.0.01",
+    version="0.0.2",
     author="WW",
     description="Utils related to backup & restore",
     long_description=long_description,
