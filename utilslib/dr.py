@@ -204,8 +204,10 @@ class K8s(object):
         K8s object
         """
 
-        if 'kube_config' in kwargs:
-            config.load_kube_config(config_file=kwargs.get("kube_config"))
+        kube_config = kwargs["kube_config"] if "kube_config" in kwargs else ""
+
+        if kube_config and len(kube_config) > 0:
+            config.load_kube_config(config_file=kube_config)
         else:
             config.load_incluster_config()
 
