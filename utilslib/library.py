@@ -102,7 +102,7 @@ def retry_wrapper(func, max_tries=5, delay=1, report=True):
                 if report:
                     log.error(
                         "Operation: {0}, retried {1:d} times but failed, "
-                        "exception {2}", func.__name__, max_tries, e)
+                        "exception {2}".format(func.__name__, max_tries, e))
                 raise e
     return wrapper
 
