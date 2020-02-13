@@ -14,7 +14,7 @@ import yaml
 
 logging.basicConfig(format='%(asctime)-15s %(name)s:%(lineno)s - %(funcName)s() %(levelname)s - %(message)s', level=logging.INFO)
 log = logging.getLogger(__name__)
-log.setLevel(logging.INFO)
+log.setLevel(logging.DEBUG)
 
 
 class DateTimeEncoder(json.JSONEncoder):
@@ -74,7 +74,7 @@ def k8s_chunk_wrapper(func, limit=100, next_item=''):
     return wrapper
 
 
-def retry_wrapper(func, max_tries=5, delay=1, report=False):
+def retry_wrapper(func, max_tries=5, delay=1, report=True):
     """
     Function wrapper to automatically retry failed operations
 

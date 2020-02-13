@@ -342,7 +342,7 @@ class K8s(Base):
                                        method_object=api)
 
     @lib.timing_wrapper
-    @lib.retry_wrapper(report=True)
+    @lib.retry_wrapper
     def read_kind(self, namespace, kind, name):
         api, method = self.get_api_method(kind)
         return lib.dynamic_method_call(name, namespace,
@@ -380,9 +380,9 @@ class K8s(Base):
     @lib.timing_wrapper
     @lib.retry_wrapper
     def get_cluster_info(self):
-        log.debug("getting kube-system/cluster-data ConfigMap")
+        self.log.debug("getting kube-system/cluster-data ConfigMap")
         data = self.read_kind("kube-system", "ConfigMap", "cluster-data")
-        log.debug("got kube-system/cluster-data ConfigMap")
+        self.log.debug("got kube-system/cluster-data ConfigMap")
         return K8s.process_data(data)["data"]
         
 
