@@ -243,9 +243,7 @@ class K8s(Base):
     @staticmethod
     def process_dict(d):
         [d.pop(x, None) for x in ['clusterName',
-                                  'generateName',
                                   'creationTimestamp', 
-                                  'deletionGracePeriodSeconds',
                                   'deletionTimestamp',
                                   'finalizers',
                                   'stringData',
