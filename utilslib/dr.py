@@ -225,11 +225,12 @@ class K8s(Base):
         self.v1beta1 = client.ApiextensionsV1beta1Api()
 
         if 'cluster_name' in kwargs:
-            self.log.info("using expliciti cluster_name=%s",  kwargs.get('cluster_name'))
+            self.log.info("using explicit cluster_name=%s",  kwargs.get('cluster_name'))
             self.cluster_info = { "cluster.name": kwargs.get('cluster_name')}  
         else:
             self.log.info("getting cluster info")
             self.cluster_info = self.get_cluster_info()
+            log.debug("kube-system/cluster-data ConfigMap: {}".format(self.cluster_info))
 
     @staticmethod
     def strip_nulls(data):
@@ -341,7 +342,7 @@ class K8s(Base):
                                        method_object=api)
 
     @lib.timing_wrapper
-    @lib.retry_wrapper
+    @lib.retry_wrapper(report=True)
     def read_kind(self, namespace, kind, name):
         api, method = self.get_api_method(kind)
         return lib.dynamic_method_call(name, namespace,
@@ -379,8 +380,9 @@ class K8s(Base):
     @lib.timing_wrapper
     @lib.retry_wrapper
     def get_cluster_info(self):
+        log.debug("getting kube-system/cluster-data ConfigMap")
         data = self.read_kind("kube-system", "ConfigMap", "cluster-data")
-        api, method = self.get_api_method("ConfigMap")
+        log.debug("got kube-system/cluster-data ConfigMap")
         return K8s.process_data(data)["data"]
         
 
