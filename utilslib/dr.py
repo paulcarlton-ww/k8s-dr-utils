@@ -230,7 +230,7 @@ class K8s(Base):
         else:
             self.log.info("getting cluster info")
             self.cluster_info = self.get_cluster_info()
-            log.debug("kube-system/cluster-data ConfigMap: {}".format(self.cluster_info))
+            self.log.debug("kube-system/cluster-data ConfigMap: {}".format(self.cluster_info))
 
     @staticmethod
     def strip_nulls(data):
