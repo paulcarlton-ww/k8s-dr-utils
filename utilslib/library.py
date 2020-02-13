@@ -126,7 +126,10 @@ def timing_wrapper(func):
         finally:
             finished = datetime.utcnow()
             elapsed = finished - started
-            log.debug("Operation: {0}, Elapsed: {1}".format(func.__name__, str(elapsed)))
+            if elapsed.total_seconds() > 1:
+                log.info("Operation: {0}, Elapsed: {1}".format(func.__name__, str(elapsed)))
+            else:
+                log.debug("Operation: {0}, Elapsed: {1}".format(func.__name__, str(elapsed)))
     return wrapper
 
 
