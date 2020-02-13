@@ -14,7 +14,7 @@ import yaml
 
 logging.basicConfig(format='%(asctime)-15s %(name)s:%(lineno)s - %(funcName)s() %(levelname)s - %(message)s', level=logging.INFO)
 log = logging.getLogger(__name__)
-log.setLevel(logging.DEBUG)
+log.setLevel(logging.INFO)
 
 
 class DateTimeEncoder(json.JSONEncoder):
