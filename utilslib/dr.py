@@ -16,7 +16,7 @@ class Base(object):
 
     Arguments:
         logname (str) -- the name of the logger to use, defaults to __name__
-        loglevel (str) -- the level of logging, defaults to CRITICAL
+        log_level (str) -- the level of logging, defaults to CRITICAL
     """
     log = None
 
@@ -36,9 +36,8 @@ class Base(object):
 
         log_name = kwargs["logname"] if "logname" in kwargs else __name__
         self.log = logging.getLogger(log_name)
-        log_level = kwargs["loglevel"] if "loglevel" in kwargs else "CRITICAL"
-        loglevel = getattr(logging, log_level, logging.CRITICAL)
-        self.log.setLevel(loglevel)
+        log_level = kwargs["log_level"] if "log_level" in kwargs else "CRITICAL"
+        self.log.setLevel(log_level)
 
 
 class S3(Base):
