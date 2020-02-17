@@ -34,11 +34,17 @@ def test_backup(s3_stub, mocker, datadir):
     patched_list_kind_deployment = mocker.patch("kubernetes.client.apis.apps_v1_api.AppsV1Api.list_namespaced_deployment", autospec=True)
     patched_list_kind_deployment.return_value = create_response_data(datadir.join('deploymentlist.json').strpath, 'V1DeploymentList')
 
+    patched_list_kind_custom = mocker.patch("kubernetes.client.apis.custom_objects_api.CustomObjectsApi.list_namespaced_custom_object", autospec=True)
+    patched_list_kind_custom.return_value = create_response_data(datadir.join('customlist.json').strpath, 'object')
+    
     patched_read_cm = mocker.patch("kubernetes.client.apis.core_v1_api.CoreV1Api.read_namespaced_config_map", autospec=True)
     patched_read_cm.return_value = create_response_data(datadir.join('configmap.json').strpath, 'V1ConfigMap')
 
     patched_read_deployment = mocker.patch("kubernetes.client.apis.apps_v1_api.AppsV1Api.read_namespaced_deployment", autospec=True)
     patched_read_deployment.return_value = create_response_data(datadir.join('deployment.json').strpath, 'V1Deployment')
+    
+    patched_get_kind_deployment = mocker.patch("kubernetes.client.apis.custom_objects_api.CustomObjectsApi.get_namespaced_custom_object", autospec=True)
+    patched_get_kind_deployment.return_value = create_response_data(datadir.join('custom.json').strpath, 'object')
 
     s3_stub.add_response(
         'put_object',
@@ -56,6 +62,11 @@ def test_backup(s3_stub, mocker, datadir):
         service_response={'ETag': '1234abc', 'VersionId': '1234'},
     )
     s3_stub.add_response(
+        'put_object',
+        expected_params={'Key': 'default/cluster1/bank-app2/VirtualService/networking.istio.io_v1alpha3/ingress-podinfo.yaml', 'Bucket': bucket_name, 'Body': ANY},
+        service_response={'ETag': '1234abc', 'VersionId': '1234'},
+    )
+    s3_stub.add_response(
         'list_objects_v2',
         expected_params={'Bucket': bucket_name, 'Prefix': prefix},
         service_response=STUB_LIST_RESPONSE
@@ -69,7 +80,7 @@ def test_backup(s3_stub, mocker, datadir):
 
     backup = Backup(client=s3_stub.client, bucket_name=bucket_name, cluster_set=cluster_set, cluster_name=cluster_name, kube_config=datadir.join('kubeconfig').strpath)
     num_stored, num_deleted = backup.save_namespace(namespace)
-    assert num_stored == 3
+    assert num_stored == 4
     assert num_deleted == 1
 
 

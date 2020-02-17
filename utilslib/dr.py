@@ -192,7 +192,9 @@ class K8s(Base):
                        'Service': ('v1', 'service'),
                        'PodTemplate': ('v1', 'pod_template'),
                        'Deployment': ('v1App', 'deployment')}
-
+    
+    supported_custom_kinds = {'VirtualService': ('networking.istio.io', 'v1alpha3', 'virtualservices')}
+    
     @lib.retry_wrapper
     def __init__(self, *args, **kwargs):
         """
@@ -221,6 +223,7 @@ class K8s(Base):
         self.v1App = client.AppsV1Api()
         self.v1ext = client.ExtensionsV1beta1Api()
         self.v1beta1 = client.ApiextensionsV1beta1Api()
+        self.custom_api = client.CustomObjectsApi()
 
         if 'cluster_name' in kwargs:
             lib.log.info("using explicit cluster_set= %s, cluster_name=%s",  kwargs.get('cluster_set'), kwargs.get('cluster_name'))
@@ -300,20 +303,31 @@ class K8s(Base):
         return api, method
 
     @lib.timing_wrapper
+    @lib.retry_wrapper
+    def list_custom_kind(self, namespace, group, version, kinds):
+        resources = self.custom_api.list_namespaced_custom_object(group, version, namespace, kinds)
+        return resources['items']
+ 
+    @lib.timing_wrapper
+    @lib.retry_wrapper
+    def read_custom_kind(self, namespace, group, version, kind, name):
+        return self.custom_api.get_namespaced_custom_object(group, version, namespace, kind, name)
+    
+    @lib.timing_wrapper
     @lib.k8s_chunk_wrapper
     @lib.retry_wrapper
-    def list_custom_resource_definition(self):
-        return self.v1beta1.list_custom_resource_definition()
+    def list_custom_resource_definitions(self, limit=100, next=next):
+        return self.v1beta1.list_custom_resource_definition(limit=limit, _continue=next)
 
     @lib.timing_wrapper
     @lib.retry_wrapper
     def read_resource_definition(self, name):
-        return self.v1beta1.list_custom_resource_definition(name=name)
+        return self.v1beta1.read_custom_resource_definition(name=name)
 
     @lib.timing_wrapper
     @lib.retry_wrapper
-    def get_custom_resource_definitions(self):
-        for resource in self.list_custom_resource_definition():
+    def get_custom_resource_definitions(self, limit=100, next=''):
+        for resource in self.list_custom_resource_definitions(limit=limit, next=next):
             yield self.v1beta1.read_custom_resource_definition(resource.metadata.name)
 
     @lib.timing_wrapper
@@ -413,6 +427,7 @@ class Backup(Base):
         resources = []
         for resource in self.k8s.get_custom_resource_definitions():
             resources.append(resource)
+        return resources
 
     @lib.timing_wrapper
     def save_namespace(self, namespace):
@@ -473,6 +488,16 @@ class Backup(Base):
                 lib.log.debug("storing %s in S3 with key %s", kind, key)
                 self.store.store_in_bucket(key, data)
                 keys.append(key)
+        # Save custom kinds
+        for kind in self.k8s.supported_custom_kinds.keys():
+            group, version, kinds = self.k8s.supported_custom_kinds[kind]
+            for item in self.k8s.list_custom_kind(namespace, group, version, kinds):
+                self.log.debug("reading kind %s with name %s in namespace %s", kind, item['metadata']['name'], namespace)
+                read_data = self.k8s.read_custom_kind(namespace, group, version, kinds, item['metadata']['name'])
+                key, data = self.create_key_yaml(read_data)
+                self.log.debug("storing %s in S3 with key %s", kind, key)
+                self.store.store_in_bucket(key, data)
+                keys.append(key)         
         return keys
 
     @lib.timing_wrapper
