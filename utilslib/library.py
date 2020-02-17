@@ -74,7 +74,7 @@ def k8s_chunk_wrapper(func, limit=100, next_item=''):
     return wrapper
 
 
-def retry_wrapper(func, max_tries=5, delay=1, report=False):
+def retry_wrapper(func, max_tries=5, delay=1, report=True):
     """
     Function wrapper to automatically retry failed operations
 
@@ -102,7 +102,7 @@ def retry_wrapper(func, max_tries=5, delay=1, report=False):
                 if report:
                     log.error(
                         "Operation: {0}, retried {1:d} times but failed, "
-                        "exception {2}", func.__name__, max_tries, e)
+                        "exception {2}".format(func.__name__, max_tries, e))
                 raise e
     return wrapper
 
@@ -126,7 +126,10 @@ def timing_wrapper(func):
         finally:
             finished = datetime.utcnow()
             elapsed = finished - started
-            log.debug("Operation: {0}, Elapsed: {1}".format(func.__name__, str(elapsed)))
+            if elapsed.total_seconds() > 1:
+                log.info("Operation: {0}, Elapsed: {1}".format(func.__name__, str(elapsed)))
+            else:
+                log.debug("Operation: {0}, Elapsed: {1}".format(func.__name__, str(elapsed)))
     return wrapper
 
 

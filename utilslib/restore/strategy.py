@@ -46,7 +46,7 @@ class KubectlRestoreStrategy(RestoreStrategy):
         if os.path.exists(self._filename):
             os.remove(self._filename)
         self._output_file = open(self._filename, "w+")
-        self.log.debug("working file for namespace %s is %s", namespace, self._filename)
+        lib.log.debug("working file for namespace %s is %s", namespace, self._filename)
 
     @lib.timing_wrapper
     def process_resource(self, resource_data):
@@ -60,15 +60,15 @@ class KubectlRestoreStrategy(RestoreStrategy):
         command = "{} apply -f {}".format(self.kubectl_path, self._filename)
         if self.dry_run:
             command += " --dry-run"
-        self.log.debug("kubectl command: %s", command)
+        lib.log.debug("kubectl command: %s", command)
 
-        self.log.info("Applying file %s using kubectl", self._filename)
+        lib.log.info("Applying file %s using kubectl", self._filename)
         p = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
         (output, _) = p.communicate()
 
         status = p.wait()
-        self.log.info("Kubectl command status/return code: %d", status)
-        self.log.debug("Kubectl output:\n%s", output)
+        lib.log.info("Kubectl command status/return code: %d", status)
+        lib.log.debug("Kubectl output:\n%s", output)
 
 
 class SingleResourceApplyStrategy(RestoreStrategy):
@@ -116,7 +116,7 @@ class SingleResourceApplyStrategy(RestoreStrategy):
         print("{0} created. status='{1}'".format(kind, str(resp.status)))
 
     def finish_namespace(self):
-        self.log.info("finished processing namespace %s", self.namespace)
+        lib.log.info("finished processing namespace %s", self.namespace)
 
 class NullStrategy(RestoreStrategy):
     """A strategy that does nothing, used for testing"""
@@ -126,10 +126,10 @@ class NullStrategy(RestoreStrategy):
         self.cluster_name = cluster_name
 
     def start_namespace(self, namespace):
-        self.log.info("start namespace: %s", namespace)
+        lib.log.info("start namespace: %s", namespace)
 
     def process_resource(self, resource_data):
-        self.log.info("process resource: %s", str(resource_data))
+        lib.log.info("process resource: %s", str(resource_data))
 
     def finish_namespace(self):
-        self.log.info("finish namespace: %s")
+        lib.log.info("finish namespace: %s")

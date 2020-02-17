@@ -34,10 +34,8 @@ class Base(object):
         """
         super(Base, self).__init__()
 
-        log_name = kwargs["logname"] if "logname" in kwargs else __name__
-        self.log = logging.getLogger(log_name)
         log_level = kwargs["log_level"] if "log_level" in kwargs else "CRITICAL"
-        self.log.setLevel(log_level)
+        lib.log.setLevel(log_level)
 
 
 class S3(Base):
@@ -56,7 +54,7 @@ class S3(Base):
         K8s object
         """
         super(S3, self).__init__(*args, **kwargs)
-        self.log.debug("S3 init", extra=dict(**kwargs))
+        lib.log.debug("S3 init", extra=dict(**kwargs))
 
         if 'client' in kwargs:
             self.client = kwargs.get("client")
@@ -101,7 +99,7 @@ class Store(S3):
         Store object
         """
         super(Store, self).__init__(*args, **kwargs)
-        self.log.debug("Store init", extra=dict(**kwargs))
+        lib.log.debug("Store init", extra=dict(**kwargs))
 
     @lib.timing_wrapper
     @lib.retry_wrapper
@@ -142,7 +140,7 @@ class Retrieve(S3):
         Retrieve object
         """
         super(Retrieve, self).__init__(*args, **kwargs)
-        self.log.debug("Retrieve init", extra=dict(**kwargs))
+        lib.log.debug("Retrieve init", extra=dict(**kwargs))
 
     @lib.timing_wrapper
     @lib.retry_wrapper
@@ -209,14 +207,14 @@ class K8s(Base):
         """
         super(K8s, self).__init__(*args, **kwargs)
 
-        self.log.debug("K8s init", extra=dict(**kwargs))
+        lib.log.debug("K8s init", extra=dict(**kwargs))
 
         kube_config = kwargs["kube_config"] if "kube_config" in kwargs else ""
         if kube_config and len(kube_config) > 0:
-            self.log.info("using kube_config=%s", kube_config)
+            lib.log.info("using kube_config=%s", kube_config)
             config.load_kube_config(config_file=kube_config)
         else:
-            self.log.info("no kube_config, running in-cluster")
+            lib.log.info("no kube_config, running in-cluster")
             config.load_incluster_config()
 
         self.v1 = client.CoreV1Api()
@@ -225,11 +223,12 @@ class K8s(Base):
         self.v1beta1 = client.ApiextensionsV1beta1Api()
 
         if 'cluster_name' in kwargs:
-            self.log.info("using explicit cluster_set= %s, cluster_name=%s",  kwargs.get('cluster_set'), kwargs.get('cluster_name'))
+            lib.log.info("using explicit cluster_set= %s, cluster_name=%s",  kwargs.get('cluster_set'), kwargs.get('cluster_name'))
             self.cluster_info = { "cluster.name": kwargs.get('cluster_name'), "cluster.set": kwargs.get('cluster_set')}  
         else:
-            self.log.info("getting cluster info")
+            lib.log.info("getting cluster info")
             self.cluster_info = self.get_cluster_info()
+            lib.log.debug("kube-system/cluster-data ConfigMap: {}".format(self.cluster_info))
 
     @staticmethod
     def strip_nulls(data):
@@ -379,8 +378,9 @@ class K8s(Base):
     @lib.timing_wrapper
     @lib.retry_wrapper
     def get_cluster_info(self):
+        lib.log.debug("getting kube-system/cluster-data ConfigMap")
         data = self.read_kind("kube-system", "ConfigMap", "cluster-data")
-        api, method = self.get_api_method("ConfigMap")
+        lib.log.debug("got kube-system/cluster-data ConfigMap")
         return K8s.process_data(data)["data"]
         
 
@@ -392,7 +392,7 @@ class Backup(Base):
     def __init__(self, *args, **kwargs):
         super(Backup, self).__init__(*args, **kwargs)
 
-        self.log.debug("Backup init", extra=dict(**kwargs))
+        lib.log.debug("Backup init", extra=dict(**kwargs))
 
         self.k8s = K8s(*args, **kwargs)
         self.store = Store(*args, **kwargs)
@@ -405,7 +405,7 @@ class Backup(Base):
                                 d['metadata']['namespace'] if d["kind"] != "Namespace" else d['metadata']['name'],
                                 d["kind"], d["apiVersion"].replace("/", "_"),
                                 d['metadata']['name'])
-        self.log.debug("key: %s, yaml: %s", key, y)
+        lib.log.debug("key: %s, yaml: %s", key, y)
         return key, y
 
     @lib.timing_wrapper
@@ -436,12 +436,12 @@ class Backup(Base):
         if namespace == "":
             raise Exception("you must supply a namespace, empty string supplied")
 
-        self.log.info("saving namespace %s", namespace)
+        lib.log.info("saving namespace %s", namespace)
 
         keys_stored = self._save_to_s3(namespace)
         keys_deleted = self._handle_deleted_resources(keys_stored, namespace)
 
-        self.log.info("saved %d resources to S3 and deleted %d resources from S3", len(keys_stored), len(keys_deleted))
+        lib.log.info("saved %d resources to S3 and deleted %d resources from S3", len(keys_stored), len(keys_deleted))
         return len(keys_stored), len(keys_deleted)
 
     @lib.timing_wrapper
@@ -457,20 +457,20 @@ class Backup(Base):
         keys = []
 
         # Save the namespace first
-        self.log.debug("reading namespace %s", namespace)
+        lib.log.debug("reading namespace %s", namespace)
         ns = self.k8s.read_namespace(namespace)
         key, data = self.create_key_yaml(ns)
-        self.log.debug("storing namespace in S3 with key %s", key)
+        lib.log.debug("storing namespace in S3 with key %s", key)
         self.store.store_in_bucket(key, data)
         keys.append(key)
 
         # Save the kinds that are supported
         for kind in K8s.supported_kinds.keys():
             for item in self.k8s.list_kind(namespace, kind):
-                self.log.debug("reading kind %s with name %s in namespace %s", kind, item.metadata.name, namespace)
+                lib.log.debug("reading kind %s with name %s in namespace %s", kind, item.metadata.name, namespace)
                 read_data = self.k8s.read_kind(namespace, kind, item.metadata.name)
                 key, data = self.create_key_yaml(read_data)
-                self.log.debug("storing %s in S3 with key %s", kind, key)
+                lib.log.debug("storing %s in S3 with key %s", kind, key)
                 self.store.store_in_bucket(key, data)
                 keys.append(key)
         return keys
@@ -491,11 +491,11 @@ class Backup(Base):
         prefix = "{}/{}/{}".format(self.k8s.cluster_info["cluster.set"],self.k8s.cluster_info["cluster.name"], namespace)
         for key in self.retrieve.get_bucket_keys(prefix):
             if key not in existing_keys:
-                self.log.info("key %s doesn't exist in k8s, deleting from s3", key)
+                lib.log.info("key %s doesn't exist in k8s, deleting from s3", key)
                 self.store.delete_from_bucket(key)
                 keys_deleted.append(key)
             else:
-                self.log.debug("key %s exists in k8s, no action")
+                lib.log.debug("key {} exists in k8s, no action".format(key))
         return keys_deleted
 
 
@@ -514,7 +514,7 @@ class Restore(Base):
     def __init__(self, bucket_name, strategy, *args, **kwargs):
         super(Restore, self).__init__(*args, **kwargs)
 
-        self.log.debug("Restore init", extra=dict(**kwargs))
+        lib.log.debug("Restore init", extra=dict(**kwargs))
 
         self.k8s = K8s(*args, **kwargs)
         self.retrieve = Retrieve(bucket_name=bucket_name, *args, **kwargs)
@@ -544,10 +544,10 @@ class Restore(Base):
         num_processed = 0
         for namespace in self.retrieve.get_s3_namespaces(clusterSet, clusterName):
             if namespacesToRestore != "*" and namespace not in namespacesToRestore:
-                self.log.info("skipping namespace: %s", namespace)
+                lib.log.info("skipping namespace: %s", namespace)
                 continue
 
-            self.log.info("restoring namespace: %s", namespace)
+            lib.log.info("restoring namespace: %s", namespace)
             self.strategy.start_namespace(namespace)
 
             try:
@@ -557,16 +557,16 @@ class Restore(Base):
                     for key in self.retrieve.get_bucket_keys(prefix):
                         _, _, _, _, name = S3.parse_key(key)
                         if Restore.exclude_check(namespace, kind, name):
-                            self.log.info("skipping: %s/%s in namespace %s", kind, name, namespace)
+                            lib.log.info("skipping: %s/%s in namespace %s", kind, name, namespace)
                             continue
                         data = self.retrieve.get_bucket_item(key)
-                        self.log.info("processing %s", key)
-                        self.log.debug("%s", data.decode("utf-8"))
+                        lib.log.info("processing %s", key)
+                        lib.log.debug("%s", data.decode("utf-8"))
                         self.strategy.process_resource(data)
                         num_processed += 1
             except ApiException as err:
                 if err.status == 409:
-                    self.log.warning("resource already exists, skipping")
+                    lib.log.warning("resource already exists, skipping")
                 else:
                     raise
             self.strategy.finish_namespace()
