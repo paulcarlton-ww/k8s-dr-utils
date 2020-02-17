@@ -184,6 +184,10 @@ class K8s(Base):
     v1 = None
     v1App = None
     v1ext = None
+    rbac = None
+    auto_scaler = None
+    custom = None
+    
     cluster_name = None
     kube_config = None
 
@@ -192,10 +196,15 @@ class K8s(Base):
                        'ResourceQuota': ('v1', 'resource_quota'),
                        'Secret': ('v1', 'secret'),
                        'Service': ('v1', 'service'),
+                       'ServiceAccount': ('v1', 'service_account'),
                        'PodTemplate': ('v1', 'pod_template'),
-                       'Deployment': ('v1App', 'deployment')}
+                       'Deployment': ('v1App', 'deployment'),
+                       'Role': ('rbac', 'role'),
+                       'RoleBinding': ('rbac', 'role_binding'),
+                       'HorizontalPodAutoscaler': ('auto_scaler', 'horizontal_pod_autoscaler')}
     
-    supported_custom_kinds = {'VirtualService': ('networking.istio.io', 'v1alpha3', 'virtualservices')}
+    supported_custom_kinds = {'VirtualService': ('networking.istio.io', 'v1alpha3', 'virtualservices'),
+                              'Gateway': ('networking.istio.io', 'v1alpha3', 'gateways')}
     
     @lib.retry_wrapper
     def __init__(self, *args, **kwargs):
@@ -225,7 +234,9 @@ class K8s(Base):
         self.v1App = client.AppsV1Api()
         self.v1ext = client.ExtensionsV1beta1Api()
         self.v1beta1 = client.ApiextensionsV1beta1Api()
-        self.custom_api = client.CustomObjectsApi()
+        self.custom = client.CustomObjectsApi()
+        self.auto_scaler = client.AutoscalingV1Api()
+        self.rbac = client.RbacAuthorizationV1Api()
 
         if 'cluster_name' in kwargs:
             self.log.info("using explicit cluster_set= %s, cluster_name=%s",  kwargs.get('cluster_set'), kwargs.get('cluster_name'))
@@ -306,13 +317,13 @@ class K8s(Base):
     @lib.timing_wrapper
     @lib.retry_wrapper
     def list_custom_kind(self, namespace, group, version, kinds):
-        resources = self.custom_api.list_namespaced_custom_object(group, version, namespace, kinds)
+        resources = self.custom.list_namespaced_custom_object(group, version, namespace, kinds)
         return resources['items']
  
     @lib.timing_wrapper
     @lib.retry_wrapper
     def read_custom_kind(self, namespace, group, version, kind, name):
-        return self.custom_api.get_namespaced_custom_object(group, version, namespace, kind, name)
+        return self.custom.get_namespaced_custom_object(group, version, namespace, kind, name)
     
     @lib.timing_wrapper
     @lib.k8s_chunk_wrapper
@@ -531,7 +542,13 @@ class Restore(Base):
                   'ConfigMap',
                   'Secret',
                   'Service',
-                  'Deployment']
+                  'Role',
+                  'ServiceAccount',
+                  'RoleBinding',
+                  'HorizontalPodAutoscaler',
+                  'Deployment',
+                  'Gateway',
+                  'VirtualService']
 
     exclude_list = [("default", "Service", "kubernetes"),
                     ("default", "Endpoints", "kubernetes")]
@@ -552,6 +569,8 @@ class Restore(Base):
         if (namespace, kind, name) in Restore.exclude_list:
             return True
         if kind == "Secret" and "default" in name:
+            return True
+        if kind == "SerivceAccount" and "default" in name:
             return True
         return False
 

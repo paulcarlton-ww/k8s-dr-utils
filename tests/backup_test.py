@@ -28,11 +28,14 @@ def test_backup(s3_stub, mocker, datadir):
     patched_list_kind_service = mocker.patch("kubernetes.client.apis.core_v1_api.CoreV1Api.list_namespaced_service", autospec=True)
     patched_list_kind_service.return_value = create_response_data(datadir.join('servicelist_empty.json').strpath, 'V1ServiceList')
 
-    patched_list_kind_podtemp = mocker.patch("kubernetes.client.apis.core_v1_api.CoreV1Api.list_namespaced_pod_template", autospec=True)
-    patched_list_kind_podtemp.return_value = create_response_data(datadir.join('podtemplatelist_empty.json').strpath, 'V1PodTemplateList')
-
     patched_list_kind_deployment = mocker.patch("kubernetes.client.apis.apps_v1_api.AppsV1Api.list_namespaced_deployment", autospec=True)
     patched_list_kind_deployment.return_value = create_response_data(datadir.join('deploymentlist.json').strpath, 'V1DeploymentList')
+    
+    patched_list_kind_serviceaccount = mocker.patch("kubernetes.client.apis.core_v1_api.CoreV1Api.list_namespaced_service_account", autospec=True)
+    patched_list_kind_serviceaccount.return_value = create_response_data(datadir.join('serviceaccountlist.json').strpath, 'V1ServiceAccountList')
+    
+    patched_list_kind_podtemp = mocker.patch("kubernetes.client.apis.core_v1_api.CoreV1Api.list_namespaced_pod_template", autospec=True)
+    patched_list_kind_podtemp.return_value = create_response_data(datadir.join('podtemplatelist_empty.json').strpath, 'V1PodTemplateList')
 
     patched_list_kind_custom = mocker.patch("kubernetes.client.apis.custom_objects_api.CustomObjectsApi.list_namespaced_custom_object", autospec=True)
     patched_list_kind_custom.return_value = create_response_data(datadir.join('customlist.json').strpath, 'object')
@@ -45,6 +48,9 @@ def test_backup(s3_stub, mocker, datadir):
     
     patched_get_kind_deployment = mocker.patch("kubernetes.client.apis.custom_objects_api.CustomObjectsApi.get_namespaced_custom_object", autospec=True)
     patched_get_kind_deployment.return_value = create_response_data(datadir.join('custom.json').strpath, 'object')
+    
+    patched_read_kind_serviceaccount = mocker.patch("kubernetes.client.apis.core_v1_api.CoreV1Api.read_namespaced_service_account", autospec=True)
+    patched_read_kind_serviceaccount.return_value = create_response_data(datadir.join('serviceaccount.json').strpath, 'V1ServiceAccount')
 
     s3_stub.add_response(
         'put_object',
@@ -59,6 +65,11 @@ def test_backup(s3_stub, mocker, datadir):
     s3_stub.add_response(
         'put_object',
         expected_params={'Key': 'default/cluster1/kube-system/Deployment/apps_v1/coredns.yaml', 'Bucket': bucket_name, 'Body': ANY},
+        service_response={'ETag': '1234abc', 'VersionId': '1234'},
+    )
+    s3_stub.add_response(
+        'put_object',
+        expected_params={'Key': 'default/cluster1/bank-sys/ServiceAccount/v1/s3-backup.yaml', 'Bucket': bucket_name, 'Body': ANY},
         service_response={'ETag': '1234abc', 'VersionId': '1234'},
     )
     s3_stub.add_response(
