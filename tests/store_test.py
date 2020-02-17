@@ -5,7 +5,7 @@ from utilslib.dr import Store
 
 
 def test_store_object(s3_stub):
-    key = '/test/key/1234'
+    key = 'id/test/key/1234'
     bucket_name = 'test-bucket'
     data = 'hello world'
     
@@ -20,7 +20,7 @@ def test_store_object(s3_stub):
     store.store_in_bucket(key, data)
 
 def test_delete_object_from_versioned_bucket(s3_stub):
-    key = '/test/key/1234'
+    key = 'id/test/key/1234'
     bucket_name = 'test-bucket'
 
     s3_stub.add_response(
@@ -36,7 +36,7 @@ def test_delete_object_from_versioned_bucket(s3_stub):
     assert result['DeleteMarker'] == True
 
 def test_delete_object_from_unversioned_bucket(s3_stub):
-    key = '/test/key/1234'
+    key = 'id/test/key/1234'
     bucket_name = 'test-bucket'
 
     s3_stub.add_response(

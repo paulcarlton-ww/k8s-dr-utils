@@ -76,11 +76,11 @@ class S3(Base):
         tuble containing the fields in the key based on '/' seperator.
         """
         fields = key.split('/')
-        if len(fields) == 5:
-            return fields[0], fields[1], fields[2], fields[4]
+        if len(fields) == 6:
+            return fields[0], fields[1], fields[2], fields[3], fields[5]
         else:
             raise Exception(
-                "key should comprise cluster/namespace/kind/apiversion/name")
+                "key should comprise set/cluster/namespace/kind/name")
 
 
 class Store(S3):
@@ -144,14 +144,14 @@ class Retrieve(S3):
 
     @lib.timing_wrapper
     @lib.retry_wrapper
-    def get_s3_namespaces(self, clustername):
+    def get_s3_namespaces(self, clusterset, clustername):
         """
         retrieve namespace names for provided cluster name prefix.
 
         :param clustername: the name of the cluster to get the namespaces for
         """
-        keys = self.get_bucket_keys(clustername)
-        namespaces = list(map(lambda k: k.split('/')[1], keys))
+        keys = self.get_bucket_keys("{}/{}".format(clusterset, clustername))
+        namespaces = list(map(lambda k: k.split('/')[2], keys))
         return list(dict.fromkeys(namespaces))
 
     @lib.timing_wrapper
@@ -223,8 +223,8 @@ class K8s(Base):
         self.v1beta1 = client.ApiextensionsV1beta1Api()
 
         if 'cluster_name' in kwargs:
-            lib.log.info("using explicit cluster_name=%s",  kwargs.get('cluster_name'))
-            self.cluster_info = { "cluster.name": kwargs.get('cluster_name')}  
+            lib.log.info("using explicit cluster_set= %s, cluster_name=%s",  kwargs.get('cluster_set'), kwargs.get('cluster_name'))
+            self.cluster_info = { "cluster.name": kwargs.get('cluster_name'), "cluster.set": kwargs.get('cluster_set')}  
         else:
             lib.log.info("getting cluster info")
             self.cluster_info = self.get_cluster_info()
@@ -397,11 +397,11 @@ class Backup(Base):
         self.k8s = K8s(*args, **kwargs)
         self.store = Store(*args, **kwargs)
         self.retrieve = Retrieve(*args, **kwargs)
-
+            
     def create_key_yaml(self, data):
         d = K8s.process_data(data)
         y = yaml.dump(d)
-        key = "{}/{}/{}/{}/{}.yaml".format(self.k8s.cluster_info["cluster.name"],
+        key = "{}/{}/{}/{}/{}/{}.yaml".format(self.k8s.cluster_info["cluster.set"],self.k8s.cluster_info["cluster.name"],
                                 d['metadata']['namespace'] if d["kind"] != "Namespace" else d['metadata']['name'],
                                 d["kind"], d["apiVersion"].replace("/", "_"),
                                 d['metadata']['name'])
@@ -488,7 +488,7 @@ class Backup(Base):
         """
         keys_deleted = []
 
-        prefix = "{}/{}".format(self.k8s.cluster_info["cluster.name"], namespace)
+        prefix = "{}/{}/{}".format(self.k8s.cluster_info["cluster.set"],self.k8s.cluster_info["cluster.name"], namespace)
         for key in self.retrieve.get_bucket_keys(prefix):
             if key not in existing_keys:
                 lib.log.info("key %s doesn't exist in k8s, deleting from s3", key)
@@ -539,10 +539,10 @@ class Restore(Base):
         self.k8s.delete_kind(namespace, kind, name)
 
     @lib.timing_wrapper
-    def restore_namespaces(self, clusterName, namespacesToRestore="*"):
+    def restore_namespaces(self, clusterSet, clusterName, namespacesToRestore="*"):
         namespace = []
         num_processed = 0
-        for namespace in self.retrieve.get_s3_namespaces(clusterName):
+        for namespace in self.retrieve.get_s3_namespaces(clusterSet, clusterName):
             if namespacesToRestore != "*" and namespace not in namespacesToRestore:
                 lib.log.info("skipping namespace: %s", namespace)
                 continue
@@ -552,10 +552,10 @@ class Restore(Base):
 
             try:
                 for kind in Restore.kind_order:
-                    prefix = "{}/{}/{}".format(clusterName, namespace, kind)
+                    prefix = "{}/{}/{}/{}".format(clusterSet, clusterName, namespace, kind)
 
                     for key in self.retrieve.get_bucket_keys(prefix):
-                        _, _, _, name = S3.parse_key(key)
+                        _, _, _, _, name = S3.parse_key(key)
                         if Restore.exclude_check(namespace, kind, name):
                             lib.log.info("skipping: %s/%s in namespace %s", kind, name, namespace)
                             continue

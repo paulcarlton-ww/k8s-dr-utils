@@ -5,7 +5,7 @@ from botocore.response import StreamingBody
 from utilslib.dr import Retrieve
 
 def test_get_bucket_keys_exists(s3_stub):
-    prefix = 'cluster2/'
+    prefix = 'default/cluster2/'
     bucket_name = 'test-bucket'
 
     s3_stub.add_response(
@@ -21,7 +21,7 @@ def test_get_bucket_keys_exists(s3_stub):
     assert len(result) == 3
 
 def test_get_bucket_keys_no_contents(s3_stub):
-    prefix = 'cluster2/'
+    prefix = 'default/cluster2/'
     bucket_name = 'test-bucket'
 
     s3_stub.add_response(
@@ -37,7 +37,7 @@ def test_get_bucket_keys_no_contents(s3_stub):
     assert len(result) == 0
 
 def test_get_bucket_item(s3_stub):
-    key = 'cluster2/bank-app2/Deployment/apps-v1/podinfo.yaml'
+    key = 'default/cluster2/bank-app2/Deployment/apps-v1/podinfo.yaml'
     bucket_name = 'test-bucket'
     body = 'hello world'.encode()
 
@@ -60,17 +60,18 @@ def test_get_bucket_item(s3_stub):
 
 def test_get_s3_namespaces(s3_stub):
     clustername = 'cluster2'
+    clusterset = 'default'
     bucket_name = 'test-bucket'
 
     s3_stub.add_response(
         'list_objects_v2',
-        expected_params={'Bucket': bucket_name, 'Prefix': clustername},
+        expected_params={'Bucket': bucket_name, 'Prefix': "{}/{}".format(clusterset, clustername)},
         service_response=STUB_LIST_RESPONSE
     )
     s3_stub.activate()
 
     retrieve = Retrieve(client=s3_stub.client, bucket_name=bucket_name)
-    result = retrieve.get_s3_namespaces(clustername)
+    result = retrieve.get_s3_namespaces(clusterset, clustername)
 
     assert len(result) == 2
     assert result[0] == "namespace1"
@@ -80,21 +81,21 @@ def test_get_s3_namespaces(s3_stub):
 STUB_LIST_RESPONSE = {
     "Contents": [
         {
-            "Key": "cluster2/namespace1/abc.yaml",
+            "Key": "default/cluster2/namespace1/abc.yaml",
             "LastModified": "2020-02-06T11:48:37.000Z",
             "ETag": "2537abc",
             "Size": 1234,
             "StorageClass": "STANDARD"
         },
         {
-            "Key": "cluster2/namespace1/def.yaml",
+            "Key": "default/cluster2/namespace1/def.yaml",
             "LastModified": "2020-02-06T11:48:37.000Z",
             "ETag": "126abc",
             "Size": 4321,
             "StorageClass": "STANDARD"
         },
         {
-            "Key": "cluster2/namespace2/def.yaml",
+            "Key": "default/cluster2/namespace2/def.yaml",
             "LastModified": "2020-02-06T11:48:37.000Z",
             "ETag": "126abc",
             "Size": 4321,

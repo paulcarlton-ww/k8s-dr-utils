@@ -7,7 +7,8 @@ def test_backup(s3_stub, mocker, datadir):
     bucket_name = 'test-bucket'
     namespace = 'kube-system'
     cluster_name = 'cluster1'
-    prefix = 'cluster1/kube-system'
+    cluster_set = 'default'
+    prefix = 'default/cluster1/kube-system'
 
     patched_read_ns = mocker.patch("kubernetes.client.apis.core_v1_api.CoreV1Api.read_namespace", autospec=True)
     patched_read_ns.return_value = create_response_data(datadir.join('namespace.json').strpath, 'V1Namespace')
@@ -41,17 +42,17 @@ def test_backup(s3_stub, mocker, datadir):
 
     s3_stub.add_response(
         'put_object',
-        expected_params={'Key': 'cluster1/kube-system/Namespace/v1/kube-system.yaml', 'Bucket': bucket_name, 'Body': ANY},
+        expected_params={'Key': 'default/cluster1/kube-system/Namespace/v1/kube-system.yaml', 'Bucket': bucket_name, 'Body': ANY},
         service_response={'ETag': '1234abc', 'VersionId': '1234'},
     )
     s3_stub.add_response(
         'put_object',
-        expected_params={'Key': 'cluster1/kube-system/ConfigMap/v1/coredns.yaml', 'Bucket': bucket_name, 'Body': ANY},
+        expected_params={'Key': 'default/cluster1/kube-system/ConfigMap/v1/coredns.yaml', 'Bucket': bucket_name, 'Body': ANY},
         service_response={'ETag': '1234abc', 'VersionId': '1234'},
     )
     s3_stub.add_response(
         'put_object',
-        expected_params={'Key': 'cluster1/kube-system/Deployment/apps_v1/coredns.yaml', 'Bucket': bucket_name, 'Body': ANY},
+        expected_params={'Key': 'default/cluster1/kube-system/Deployment/apps_v1/coredns.yaml', 'Bucket': bucket_name, 'Body': ANY},
         service_response={'ETag': '1234abc', 'VersionId': '1234'},
     )
     s3_stub.add_response(
@@ -61,12 +62,12 @@ def test_backup(s3_stub, mocker, datadir):
     )
     s3_stub.add_response(
         'delete_object',
-        expected_params={'Key': 'cluster1/kube-system/Deployment/apps_v1/appdeleted.yaml', 'Bucket': bucket_name},
+        expected_params={'Key': 'default/cluster1/kube-system/Deployment/apps_v1/appdeleted.yaml', 'Bucket': bucket_name},
         service_response={'DeleteMarker': False, 'VersionId': '1234'},
     )
     s3_stub.activate()
 
-    backup = Backup(client=s3_stub.client, bucket_name=bucket_name, cluster_name=cluster_name, kube_config=datadir.join('kubeconfig').strpath)
+    backup = Backup(client=s3_stub.client, bucket_name=bucket_name, cluster_set=cluster_set, cluster_name=cluster_name, kube_config=datadir.join('kubeconfig').strpath)
     num_stored, num_deleted = backup.save_namespace(namespace)
     assert num_stored == 3
     assert num_deleted == 1
@@ -75,28 +76,28 @@ def test_backup(s3_stub, mocker, datadir):
 STUB_LIST_RESPONSE = {
     "Contents": [
         {
-            "Key": "cluster1/kube-system/Namespace/v1/kube-system.yaml",
+            "Key": "default/cluster1/kube-system/Namespace/v1/kube-system.yaml",
             "LastModified": "2020-02-06T11:48:37.000Z",
             "ETag": "2537abc",
             "Size": 1234,
             "StorageClass": "STANDARD"
         },
         {
-            "Key": "cluster1/kube-system/ConfigMap/v1/coredns.yaml",
+            "Key": "default/cluster1/kube-system/ConfigMap/v1/coredns.yaml",
             "LastModified": "2020-02-06T11:48:37.000Z",
             "ETag": "126abc",
             "Size": 4321,
             "StorageClass": "STANDARD"
         },
         {
-            "Key": "cluster1/kube-system/Deployment/apps_v1/coredns.yaml",
+            "Key": "default/cluster1/kube-system/Deployment/apps_v1/coredns.yaml",
             "LastModified": "2020-02-06T11:48:37.000Z",
             "ETag": "126abc",
             "Size": 4321,
             "StorageClass": "STANDARD"
         },
         {
-            "Key": "cluster1/kube-system/Deployment/apps_v1/appdeleted.yaml",
+            "Key": "default/cluster1/kube-system/Deployment/apps_v1/appdeleted.yaml",
             "LastModified": "2020-02-06T11:48:37.000Z",
             "ETag": "126abc",
             "Size": 4321,
