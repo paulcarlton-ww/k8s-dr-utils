@@ -527,7 +527,7 @@ class Backup(Base):
         prefix = "{}/{}/{}".format(self.k8s.cluster_info["cluster.set"],self.k8s.cluster_info["cluster.name"], namespace)
         for key in self.retrieve.get_bucket_keys(prefix):
             if key not in existing_keys:
-                self.log.info("key %s doesn't exist in k8s, deleting from s3", key)
+                self.log.info("key {} doesn't exist in k8s, deleting from s3".format(key))
                 self.store.delete_from_bucket(key)
                 keys_deleted.append(key)
             else:
