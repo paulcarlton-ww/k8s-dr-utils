@@ -163,6 +163,9 @@ class Retrieve(S3):
         :param prefix: The key prefix .
         """
         response = self.client.list_objects_v2(Bucket=self.bucket_name, Prefix=prefix)
+        #lib.log.debug("response: {}".format(response))
+        if response['KeyCount'] == 0:
+            return []
         return list(map(lambda i: i['Key'], response['Contents']))
 
     @lib.timing_wrapper
@@ -182,6 +185,10 @@ class K8s(Base):
     v1 = None
     v1App = None
     v1ext = None
+    rbac = None
+    auto_scaler = None
+    custom = None
+    
     cluster_name = None
     kube_config = None
 
@@ -190,10 +197,15 @@ class K8s(Base):
                        'ResourceQuota': ('v1', 'resource_quota'),
                        'Secret': ('v1', 'secret'),
                        'Service': ('v1', 'service'),
+                       'ServiceAccount': ('v1', 'service_account'),
                        'PodTemplate': ('v1', 'pod_template'),
-                       'Deployment': ('v1App', 'deployment')}
+                       'Deployment': ('v1App', 'deployment'),
+                       'Role': ('rbac', 'role'),
+                       'RoleBinding': ('rbac', 'role_binding'),
+                       'HorizontalPodAutoscaler': ('auto_scaler', 'horizontal_pod_autoscaler')}
     
-    supported_custom_kinds = {'VirtualService': ('networking.istio.io', 'v1alpha3', 'virtualservices')}
+    supported_custom_kinds = {'VirtualService': ('networking.istio.io', 'v1alpha3', 'virtualservices'),
+                              'Gateway': ('networking.istio.io', 'v1alpha3', 'gateways')}
     
     @lib.retry_wrapper
     def __init__(self, *args, **kwargs):
@@ -223,7 +235,9 @@ class K8s(Base):
         self.v1App = client.AppsV1Api()
         self.v1ext = client.ExtensionsV1beta1Api()
         self.v1beta1 = client.ApiextensionsV1beta1Api()
-        self.custom_api = client.CustomObjectsApi()
+        self.custom = client.CustomObjectsApi()
+        self.auto_scaler = client.AutoscalingV1Api()
+        self.rbac = client.RbacAuthorizationV1Api()
 
         if 'cluster_name' in kwargs:
             lib.log.info("using explicit cluster_set= %s, cluster_name=%s",  kwargs.get('cluster_set'), kwargs.get('cluster_name'))
@@ -305,13 +319,13 @@ class K8s(Base):
     @lib.timing_wrapper
     @lib.retry_wrapper
     def list_custom_kind(self, namespace, group, version, kinds):
-        resources = self.custom_api.list_namespaced_custom_object(group, version, namespace, kinds)
+        resources = self.custom.list_namespaced_custom_object(group, version, namespace, kinds)
         return resources['items']
  
     @lib.timing_wrapper
     @lib.retry_wrapper
     def read_custom_kind(self, namespace, group, version, kind, name):
-        return self.custom_api.get_namespaced_custom_object(group, version, namespace, kind, name)
+        return self.custom.get_namespaced_custom_object(group, version, namespace, kind, name)
     
     @lib.timing_wrapper
     @lib.k8s_chunk_wrapper
@@ -419,7 +433,7 @@ class Backup(Base):
                                 d['metadata']['namespace'] if d["kind"] != "Namespace" else d['metadata']['name'],
                                 d["kind"], d["apiVersion"].replace("/", "_"),
                                 d['metadata']['name'])
-        lib.log.debug("key: %s, yaml: %s", key, y)
+        lib.log.debug("key: %s, yaml...\n %s", key, y)
         return key, y
 
     @lib.timing_wrapper
@@ -492,10 +506,10 @@ class Backup(Base):
         for kind in self.k8s.supported_custom_kinds.keys():
             group, version, kinds = self.k8s.supported_custom_kinds[kind]
             for item in self.k8s.list_custom_kind(namespace, group, version, kinds):
-                self.log.debug("reading kind %s with name %s in namespace %s", kind, item['metadata']['name'], namespace)
+                lib.log.debug("reading kind %s with name %s in namespace %s", kind, item['metadata']['name'], namespace)
                 read_data = self.k8s.read_custom_kind(namespace, group, version, kinds, item['metadata']['name'])
                 key, data = self.create_key_yaml(read_data)
-                self.log.debug("storing %s in S3 with key %s", kind, key)
+                lib.log.debug("storing %s in S3 with key %s", kind, key)
                 self.store.store_in_bucket(key, data)
                 keys.append(key)         
         return keys
@@ -516,7 +530,7 @@ class Backup(Base):
         prefix = "{}/{}/{}".format(self.k8s.cluster_info["cluster.set"],self.k8s.cluster_info["cluster.name"], namespace)
         for key in self.retrieve.get_bucket_keys(prefix):
             if key not in existing_keys:
-                lib.log.info("key %s doesn't exist in k8s, deleting from s3", key)
+                lib.log.info("key {} doesn't exist in k8s, deleting from s3".format(key))
                 self.store.delete_from_bucket(key)
                 keys_deleted.append(key)
             else:
@@ -531,7 +545,13 @@ class Restore(Base):
                   'ConfigMap',
                   'Secret',
                   'Service',
-                  'Deployment']
+                  'Role',
+                  'ServiceAccount',
+                  'RoleBinding',
+                  'HorizontalPodAutoscaler',
+                  'Deployment',
+                  'Gateway',
+                  'VirtualService']
 
     exclude_list = [("default", "Service", "kubernetes"),
                     ("default", "Endpoints", "kubernetes")]
@@ -552,6 +572,8 @@ class Restore(Base):
         if (namespace, kind, name) in Restore.exclude_list:
             return True
         if kind == "Secret" and "default" in name:
+            return True
+        if kind == "SerivceAccount" and "default" in name:
             return True
         return False
 

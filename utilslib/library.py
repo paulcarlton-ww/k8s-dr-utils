@@ -68,7 +68,6 @@ def k8s_chunk_wrapper(func, limit=100, next_item=''):
                 next_item = results.metadata._continue
             except Exception as e:
                 raise e
-            log.debug("Items retruned by {} in this chunk...\n{}".format(func.__name__, results.items))
             all_items += results.items
         return all_items
     return wrapper

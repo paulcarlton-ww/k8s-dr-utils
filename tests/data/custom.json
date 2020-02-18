@@ -1,0 +1,36 @@
+{
+    "apiVersion": "networking.istio.io/v1alpha3",
+    "kind": "VirtualService",
+    "metadata": {
+        "creationTimestamp": "2020-02-05T16:14:37Z",
+        "generation": 1,
+        "labels": {
+            "app.kubernetes.io/name": "podinfo"
+        },
+        "name": "ingress-podinfo",
+        "namespace": "bank-app2",
+        "resourceVersion": "36718",
+        "selfLink": "/apis/networking.istio.io/v1alpha3/namespaces/bank-app2/virtualservices/ingress-podinfo",
+        "uid": "9b234d42-4832-11ea-858d-06a063cb1e0e"
+    },
+    "spec": {
+        "gateways": [
+            "mesh",
+            "podinfo"
+        ],
+        "hosts": [
+            "external.dns"
+        ],
+        "http": [
+            {
+                "route": [
+                    {
+                        "destination": {
+                            "host": "podinfo.bank-app2.svc.cluster.local"
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}
