@@ -163,6 +163,9 @@ class Retrieve(S3):
         :param prefix: The key prefix .
         """
         response = self.client.list_objects_v2(Bucket=self.bucket_name, Prefix=prefix)
+        #lib.log.debug("response: {}".format(response))
+        if response['KeyCount'] == 0:
+            return []
         return list(map(lambda i: i['Key'], response['Contents']))
 
     @lib.timing_wrapper
