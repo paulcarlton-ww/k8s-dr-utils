@@ -503,10 +503,10 @@ class Backup(Base):
         for kind in self.k8s.supported_custom_kinds.keys():
             group, version, kinds = self.k8s.supported_custom_kinds[kind]
             for item in self.k8s.list_custom_kind(namespace, group, version, kinds):
-                self.log.debug("reading kind %s with name %s in namespace %s", kind, item['metadata']['name'], namespace)
+                lib.log.debug("reading kind %s with name %s in namespace %s", kind, item['metadata']['name'], namespace)
                 read_data = self.k8s.read_custom_kind(namespace, group, version, kinds, item['metadata']['name'])
                 key, data = self.create_key_yaml(read_data)
-                self.log.debug("storing %s in S3 with key %s", kind, key)
+                lib.log.debug("storing %s in S3 with key %s", kind, key)
                 self.store.store_in_bucket(key, data)
                 keys.append(key)         
         return keys
