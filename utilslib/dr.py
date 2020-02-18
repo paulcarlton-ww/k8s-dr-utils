@@ -430,7 +430,7 @@ class Backup(Base):
                                 d['metadata']['namespace'] if d["kind"] != "Namespace" else d['metadata']['name'],
                                 d["kind"], d["apiVersion"].replace("/", "_"),
                                 d['metadata']['name'])
-        self.log.debug("key: %s, yaml: %s", key, y)
+        self.log.debug("key: %s, yaml...\n %s", key, y)
         return key, y
 
     @lib.timing_wrapper

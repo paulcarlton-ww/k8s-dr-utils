@@ -68,7 +68,6 @@ def k8s_chunk_wrapper(func, limit=100, next_item=''):
                 next_item = results.metadata._continue
             except Exception as e:
                 raise e
-            log.debug("Items retruned by {} in this chunk...\n{}".format(func.__name__, results.items))
             all_items += results.items
         return all_items
     return wrapper
@@ -126,7 +125,10 @@ def timing_wrapper(func):
         finally:
             finished = datetime.utcnow()
             elapsed = finished - started
-            log.debug("Operation: {0}, Elapsed: {1}".format(func.__name__, str(elapsed)))
+            if elapsed.total_seconds() > 1:
+                log.info("Operation: {0}, Elapsed: {1}".format(func.__name__, str(elapsed)))
+            else:
+                log.debug("Operation: {0}, Elapsed: {1}".format(func.__name__, str(elapsed)))
     return wrapper
 
 
