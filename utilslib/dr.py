@@ -410,9 +410,10 @@ class K8s(Base):
         data = self.read_kind("kube-system", "ConfigMap", "cluster-data")
         lib.log.debug("got kube-system/cluster-data ConfigMap")
         return K8s.process_data(data)["data"]
-        
+
 
 class Backup(Base):
+    """Backup Kubernetes to S3"""
 
     custom_resources = []
 
@@ -425,16 +426,39 @@ class Backup(Base):
         self.k8s = K8s(*args, **kwargs)
         self.store = Store(*args, **kwargs)
         self.retrieve = Retrieve(*args, **kwargs)
-            
-    def create_key_yaml(self, data):
+
+    def _create_key_from_object(self, data):
         d = K8s.process_data(data)
         y = yaml.dump(d)
-        key = "{}/{}/{}/{}/{}/{}.yaml".format(self.k8s.cluster_info["cluster.set"],self.k8s.cluster_info["cluster.name"],
-                                d['metadata']['namespace'] if d["kind"] != "Namespace" else d['metadata']['name'],
-                                d["kind"], d["apiVersion"].replace("/", "_"),
-                                d['metadata']['name'])
+
+        namespace = d['metadata']['namespace'] if d["kind"] != "Namespace" else d['metadata']['name']
+        kind = d["kind"]
+        api_version = d["apiVersion"].replace("/", "_")
+        name = d['metadata']['name']
+
+        key = self.create_s3_key(namespace, kind, api_version, name)
+
         lib.log.debug("key: %s, yaml...\n %s", key, y)
         return key, y
+
+    def create_s3_key(self, namespace, kind, api_version, name):
+        """Create the key in S3 for a resource
+
+        Arguments:
+            namespace {str} -- the namespace of the resource instance
+            kind {str} -- the kind name of the resource
+            api_version {str} -- the api version of the resource. If the apiVersion contains '/' it will be replaced by '_'
+                                 For sample, v1/apps will be changed to v1_apps
+            name {str} -- the name of the resource instance
+
+        Returns:
+            str -- a formatted key
+        """
+        key = "{}/{}/{}/{}/{}/{}.yaml".format(self.k8s.cluster_info["cluster.set"],
+                                              self.k8s.cluster_info["cluster.name"],
+                                              namespace,
+                                              kind, api_version.replace("/", " "), name)
+        return key
 
     @lib.timing_wrapper
     def get_custom_resources(self):
@@ -488,7 +512,7 @@ class Backup(Base):
         # Save the namespace first
         lib.log.debug("reading namespace %s", namespace)
         ns = self.k8s.read_namespace(namespace)
-        key, data = self.create_key_yaml(ns)
+        key, data = self._create_key_from_object(ns)
         lib.log.debug("storing namespace in S3 with key %s", key)
         self.store.store_in_bucket(key, data)
         keys.append(key)
@@ -498,7 +522,7 @@ class Backup(Base):
             for item in self.k8s.list_kind(namespace, kind):
                 lib.log.debug("reading kind %s with name %s in namespace %s", kind, item.metadata.name, namespace)
                 read_data = self.k8s.read_kind(namespace, kind, item.metadata.name)
-                key, data = self.create_key_yaml(read_data)
+                key, data = self._create_key_from_object(read_data)
                 lib.log.debug("storing %s in S3 with key %s", kind, key)
                 self.store.store_in_bucket(key, data)
                 keys.append(key)
@@ -508,7 +532,7 @@ class Backup(Base):
             for item in self.k8s.list_custom_kind(namespace, group, version, kinds):
                 lib.log.debug("reading kind %s with name %s in namespace %s", kind, item['metadata']['name'], namespace)
                 read_data = self.k8s.read_custom_kind(namespace, group, version, kinds, item['metadata']['name'])
-                key, data = self.create_key_yaml(read_data)
+                key, data = self._create_key_from_object(read_data)
                 lib.log.debug("storing %s in S3 with key %s", kind, key)
                 self.store.store_in_bucket(key, data)
                 keys.append(key)         
@@ -517,7 +541,7 @@ class Backup(Base):
     @lib.timing_wrapper
     def _handle_deleted_resources(self, existing_keys, namespace):
         """Delete any artefacts from S3 for non-existent resources
-        
+
         Arguments:
             existing_keys {str[]} -- an array of the keys for resources that exist in the namespace
             namespace {str} -- the kubernetes namespace to backup
@@ -539,6 +563,8 @@ class Backup(Base):
 
 
 class Restore(Base):
+    """Restore a Kubernetes cluster from S3"""
+
     kind_order = ['Namespace',
                   'LimitRange',
                   'ResourceQuota',
