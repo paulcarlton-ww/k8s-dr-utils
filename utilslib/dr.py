@@ -1,8 +1,6 @@
 """
 This module contains DR classes
 """
-import os
-import logging
 import boto3
 import boto3.s3
 from botocore.config import Config
@@ -10,6 +8,7 @@ import yaml
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 import utilslib.library as lib
+from utilslib.restore.strategy import RestoreStrategy
 
 class Base(object):
     """Base class that provides a logger
@@ -411,35 +410,26 @@ class K8s(Base):
         lib.log.debug("got kube-system/cluster-data ConfigMap")
         return K8s.process_data(data)["data"]
 
+class DRBase(Base):
+    """Base class for DR operations"""
 
-class Backup(Base):
-    """Backup Kubernetes to S3"""
+    exclude_list = [("default", "Service", "kubernetes"),
+                    ("default", "Endpoints", "kubernetes")]
 
-    custom_resources = []
-
-    @lib.retry_wrapper
     def __init__(self, *args, **kwargs):
-        super(Backup, self).__init__(*args, **kwargs)
-
+        super(DRBase, self).__init__(*args, **kwargs)
         lib.log.debug("Backup init", extra=dict(**kwargs))
 
         self.k8s = K8s(*args, **kwargs)
-        self.store = Store(*args, **kwargs)
-        self.retrieve = Retrieve(*args, **kwargs)
 
-    def _create_key_from_object(self, data):
-        d = K8s.process_data(data)
-        y = yaml.dump(d)
-
-        namespace = d['metadata']['namespace'] if d["kind"] != "Namespace" else d['metadata']['name']
-        kind = d["kind"]
-        api_version = d["apiVersion"].replace("/", "_")
-        name = d['metadata']['name']
-
-        key = self.create_s3_key(namespace, kind, api_version, name)
-
-        lib.log.debug("key: %s, yaml...\n %s", key, y)
-        return key, y
+    def exclude_check(self, namespace, kind, name):
+        if (namespace, kind, name) in self.exclude_list:
+            return True
+        if kind == "Secret" and "default" in name:
+            return True
+        if kind == "SerivceAccount" and "default" in name:
+            return True
+        return False
 
     def create_s3_key(self, namespace, kind, api_version, name):
         """Create the key in S3 for a resource
@@ -459,6 +449,34 @@ class Backup(Base):
                                               namespace,
                                               kind, api_version.replace("/", " "), name)
         return key
+
+class Backup(DRBase):
+    """Backup Kubernetes to S3"""
+
+    custom_resources = []
+
+    @lib.retry_wrapper
+    def __init__(self, *args, **kwargs):
+        super(Backup, self).__init__(*args, **kwargs)
+
+        lib.log.debug("Backup init", extra=dict(**kwargs))
+
+        self.store = Store(*args, **kwargs)
+        self.retrieve = Retrieve(*args, **kwargs)
+
+    def _create_key_from_object(self, data):
+        d = K8s.process_data(data)
+        y = yaml.dump(d)
+
+        namespace = d['metadata']['namespace'] if d["kind"] != "Namespace" else d['metadata']['name']
+        kind = d["kind"]
+        api_version = d["apiVersion"].replace("/", "_")
+        name = d['metadata']['name']
+
+        key = self.create_s3_key(namespace, kind, api_version, name)
+
+        lib.log.debug("key: %s, yaml...\n %s", key, y)
+        return key, y
 
     @lib.timing_wrapper
     def get_custom_resources(self):
@@ -562,7 +580,7 @@ class Backup(Base):
         return keys_deleted
 
 
-class Restore(Base):
+class Restore(DRBase):
     """Restore a Kubernetes cluster from S3"""
 
     kind_order = ['Namespace',
@@ -579,29 +597,26 @@ class Restore(Base):
                   'Gateway',
                   'VirtualService']
 
-    exclude_list = [("default", "Service", "kubernetes"),
-                    ("default", "Endpoints", "kubernetes")]
-
     def __init__(self, bucket_name, strategy, *args, **kwargs):
         super(Restore, self).__init__(*args, **kwargs)
-
         lib.log.debug("Restore init", extra=dict(**kwargs))
 
-        self.k8s = K8s(*args, **kwargs)
+        if not isinstance(bucket_name, str):
+            raise Exception("bucket_name must be a string")
+
+        if bucket_name == "":
+            raise Exception("you must supply a bucket_name, empty string supplied")
+
+        if not strategy:
+            raise Exception("you must supply a strategy to use for backup")
+
+        if not issubclass(strategy, RestoreStrategy):
+            raise Exception("strategy used be a subclass of RestoreStrategy")
+
         self.retrieve = Retrieve(bucket_name=bucket_name, *args, **kwargs)
 
         self.bucket_name = bucket_name
         self.strategy = strategy
-
-    @staticmethod
-    def exclude_check(namespace, kind, name):
-        if (namespace, kind, name) in Restore.exclude_list:
-            return True
-        if kind == "Secret" and "default" in name:
-            return True
-        if kind == "SerivceAccount" and "default" in name:
-            return True
-        return False
 
     @lib.timing_wrapper
     def remove_if_exists(self, namespace, kind, name):
@@ -629,7 +644,7 @@ class Restore(Base):
 
                     for key in self.retrieve.get_bucket_keys(prefix):
                         _, _, _, _, name = S3.parse_key(key)
-                        if Restore.exclude_check(namespace, kind, name):
+                        if self.exclude_check(namespace, kind, name):
                             lib.log.info("skipping: %s/%s in namespace %s", kind, name, namespace)
                             continue
                         data = self.retrieve.get_bucket_item(key)
