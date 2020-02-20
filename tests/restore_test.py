@@ -59,10 +59,39 @@ def test_restore_all_namespaces(s3_stub, mocker, datadir):
     )
     s3_stub.add_response(
         'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'default/cluster1/kube-system/Role'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'default/cluster1/kube-system/ServiceAccount'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'default/cluster1/kube-system/RoleBinding'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'default/cluster1/kube-system/HorizontalPodAutoscaler'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
         expected_params={'Bucket': bucket_name, 'Prefix': 'default/cluster1/kube-system/Deployment'},
         service_response=STUB_LIST_RESPONSE_EMPTY
     )
-
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'default/cluster1/kube-system/Gateway'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'default/cluster1/kube-system/VirtualService'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
     s3_stub.add_response(
         'list_objects_v2',
         expected_params={'Bucket': bucket_name, 'Prefix': 'default/cluster1/app1/Namespace'},
@@ -106,9 +135,44 @@ def test_restore_all_namespaces(s3_stub, mocker, datadir):
     )
     s3_stub.add_response(
         'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'default/cluster1/app1/Role'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'default/cluster1/app1/ServiceAccount'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'default/cluster1/app1/RoleBinding'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'default/cluster1/app1/HorizontalPodAutoscaler'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
         expected_params={'Bucket': bucket_name, 'Prefix': 'default/cluster1/app1/Deployment'},
         service_response=STUB_LIST_RESPONSE_EMPTY
     )
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'default/cluster1/app1/Gateway'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'default/cluster1/app1/VirtualService'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    # s3_stub.add_response(
+    #     'list_objects_v2',
+    #     expected_params={'Bucket': bucket_name, 'Prefix': 'default/cluster1/app1/Namespace'},
+    #     service_response=STUB_LIST_RESPONSE_EMPTY
+    # )
 
     s3_stub.activate()
 
@@ -116,7 +180,6 @@ def test_restore_all_namespaces(s3_stub, mocker, datadir):
 
     restore = Restore(bucket_name,strategy,client=s3_stub.client,cluster_set=cluster_set, cluster_name=cluster_name, kube_config=datadir.join('kubeconfig').strpath)
     num_processed = restore.restore_namespaces(cluster_set, cluster_name)
-
     assert num_processed == 2
 
 def test_restore_single_namespaces(s3_stub, mocker, datadir):
@@ -173,7 +236,37 @@ def test_restore_single_namespaces(s3_stub, mocker, datadir):
     )
     s3_stub.add_response(
         'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'default/cluster1/kube-system/Role'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'default/cluster1/kube-system/ServiceAccount'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'default/cluster1/kube-system/RoleBinding'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'default/cluster1/kube-system/HorizontalPodAutoscaler'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
         expected_params={'Bucket': bucket_name, 'Prefix': 'default/cluster1/kube-system/Deployment'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'default/cluster1/kube-system/Gateway'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'default/cluster1/kube-system/VirtualService'},
         service_response=STUB_LIST_RESPONSE_EMPTY
     )
 
@@ -188,6 +281,7 @@ def test_restore_single_namespaces(s3_stub, mocker, datadir):
 
 
 STUB_LIST_RESPONSE_MULTINS = {
+    "KeyCount": 2,
     "Contents": [
         {
             "Key": "default/cluster1/kube-system/Namespace/v1/kube-system.yaml",
@@ -207,6 +301,7 @@ STUB_LIST_RESPONSE_MULTINS = {
 }
 
 STUB_LIST_RESPONSE_KS_NS = {
+    "KeyCount": 1,
     "Contents": [
         {
             "Key": "default/cluster1/kube-system/Namespace/v1/kube-system.yaml",
@@ -219,6 +314,7 @@ STUB_LIST_RESPONSE_KS_NS = {
 }
 
 STUB_LIST_RESPONSE_APP_NS = {
+    "KeyCount": 1,
     "Contents": [
         {
             "Key": "default/cluster1/app1/Namespace/v1/app1.yaml",
@@ -231,5 +327,6 @@ STUB_LIST_RESPONSE_APP_NS = {
 }
 
 STUB_LIST_RESPONSE_EMPTY = {
+    "KeyCount": 0,
     "Contents": []
 }

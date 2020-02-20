@@ -27,7 +27,7 @@ def test_get_bucket_keys_no_contents(s3_stub):
     s3_stub.add_response(
         'list_objects_v2',
         expected_params={'Bucket': bucket_name, 'Prefix': prefix},
-        service_response={'Contents':[]}
+        service_response=STUB_NO_CONTENTS
     )
     s3_stub.activate()
 
@@ -77,8 +77,13 @@ def test_get_s3_namespaces(s3_stub):
     assert result[0] == "namespace1"
     assert result[1] == "namespace2"
 
+STUB_NO_CONTENTS = {
+    "KeyCount": 0,
+    "Contents": []
+}
 
 STUB_LIST_RESPONSE = {
+    "KeyCount": 3,
     "Contents": [
         {
             "Key": "default/cluster2/namespace1/abc.yaml",

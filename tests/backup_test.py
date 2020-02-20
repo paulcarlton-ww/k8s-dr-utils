@@ -1,4 +1,5 @@
 # pylint: skip-file
+import os
 from utilslib.dr import Backup
 from botocore.stub import ANY
 from .testutils import create_response_data
@@ -37,8 +38,17 @@ def test_backup(s3_stub, mocker, datadir):
     patched_list_kind_podtemp = mocker.patch("kubernetes.client.apis.core_v1_api.CoreV1Api.list_namespaced_pod_template", autospec=True)
     patched_list_kind_podtemp.return_value = create_response_data(datadir.join('podtemplatelist_empty.json').strpath, 'V1PodTemplateList')
 
-    patched_list_kind_custom = mocker.patch("kubernetes.client.apis.custom_objects_api.CustomObjectsApi.list_namespaced_custom_object", autospec=True)
-    patched_list_kind_custom.return_value = create_response_data(datadir.join('customlist.json').strpath, 'object')
+    patched_list_kind_custom = mocker.patch("kubernetes.client.apis.custom_objects_api.CustomObjectsApi.list_namespaced_custom_object", new=_list_namespaced_custom_object)
+    #patched_list_kind_custom.return_value = create_response_data(datadir.join('customlist.json').strpath, 'object')
+
+    patch_list_kind_roles = mocker.patch("kubernetes.client.apis.rbac_authorization_v1_api.RbacAuthorizationV1Api.list_namespaced_role", autospec=True)
+    patch_list_kind_roles.return_value = create_response_data(datadir.join('list_empty.json').strpath, 'V1RoleList')
+
+    patch_list_kind_rolebinding = mocker.patch("kubernetes.client.apis.rbac_authorization_v1_api.RbacAuthorizationV1Api.list_namespaced_role_binding", autospec=True)
+    patch_list_kind_rolebinding.return_value = create_response_data(datadir.join('list_empty.json').strpath, 'V1RoleBindingList')
+
+    patch_list_kind_hpa = mocker.patch("kubernetes.client.apis.autoscaling_v1_api.AutoscalingV1Api.list_namespaced_horizontal_pod_autoscaler", autospec=True)
+    patch_list_kind_hpa.return_value = create_response_data(datadir.join('list_empty.json').strpath, 'V1HorizontalPodAutoscalerList')
     
     patched_read_cm = mocker.patch("kubernetes.client.apis.core_v1_api.CoreV1Api.read_namespaced_config_map", autospec=True)
     patched_read_cm.return_value = create_response_data(datadir.join('configmap.json').strpath, 'V1ConfigMap')
@@ -46,11 +56,13 @@ def test_backup(s3_stub, mocker, datadir):
     patched_read_deployment = mocker.patch("kubernetes.client.apis.apps_v1_api.AppsV1Api.read_namespaced_deployment", autospec=True)
     patched_read_deployment.return_value = create_response_data(datadir.join('deployment.json').strpath, 'V1Deployment')
     
-    patched_get_kind_deployment = mocker.patch("kubernetes.client.apis.custom_objects_api.CustomObjectsApi.get_namespaced_custom_object", autospec=True)
-    patched_get_kind_deployment.return_value = create_response_data(datadir.join('custom.json').strpath, 'object')
+    patched_get_kind_deployment = mocker.patch("kubernetes.client.apis.custom_objects_api.CustomObjectsApi.get_namespaced_custom_object", new=_get_namespaced_custom_object)
+    #patched_get_kind_deployment.return_value = create_response_data(datadir.join('custom.json').strpath, 'object')
     
     patched_read_kind_serviceaccount = mocker.patch("kubernetes.client.apis.core_v1_api.CoreV1Api.read_namespaced_service_account", autospec=True)
     patched_read_kind_serviceaccount.return_value = create_response_data(datadir.join('serviceaccount.json').strpath, 'V1ServiceAccount')
+
+    
 
     s3_stub.add_response(
         'put_object',
@@ -64,12 +76,12 @@ def test_backup(s3_stub, mocker, datadir):
     )
     s3_stub.add_response(
         'put_object',
-        expected_params={'Key': 'default/cluster1/kube-system/Deployment/apps_v1/coredns.yaml', 'Bucket': bucket_name, 'Body': ANY},
+        expected_params={'Key': 'default/cluster1/bank-sys/ServiceAccount/v1/s3-backup.yaml', 'Bucket': bucket_name, 'Body': ANY},
         service_response={'ETag': '1234abc', 'VersionId': '1234'},
     )
     s3_stub.add_response(
         'put_object',
-        expected_params={'Key': 'default/cluster1/bank-sys/ServiceAccount/v1/s3-backup.yaml', 'Bucket': bucket_name, 'Body': ANY},
+        expected_params={'Key': 'default/cluster1/kube-system/Deployment/apps_v1/coredns.yaml', 'Bucket': bucket_name, 'Body': ANY},
         service_response={'ETag': '1234abc', 'VersionId': '1234'},
     )
     s3_stub.add_response(
@@ -91,11 +103,37 @@ def test_backup(s3_stub, mocker, datadir):
 
     backup = Backup(client=s3_stub.client, bucket_name=bucket_name, cluster_set=cluster_set, cluster_name=cluster_name, kube_config=datadir.join('kubeconfig').strpath)
     num_stored, num_deleted = backup.save_namespace(namespace)
-    assert num_stored == 4
+    assert num_stored == 5
     assert num_deleted == 1
+
+def _list_namespaced_custom_object(self, group, version, namespace, plural, **kwargs):
+    if plural == "virtualservices":
+        return create_response_data(_get_test_file('virtualservice_list.json'), 'object')
+    elif plural == "gateways":
+        return create_response_data(_get_test_file('gateway_list.json'), 'object')
+    else:
+        raise Exception("received unknown custom list")
+    return
+
+def _get_namespaced_custom_object(self, group, version, namespace, plural, name, **kwargs):
+    if plural == "virtualservices":
+        return create_response_data(_get_test_file('virtualservice.json'), 'object')
+    else:
+        raise Exception("received unknown custom list")
+    return
+
+
+def _get_test_file(testfilename):
+    filename = os.path.realpath(__file__)
+    mod_dir = os.path.dirname(filename)
+    test_dir = os.path.join(mod_dir, "data/")
+    test_file = os.path.join(test_dir, testfilename)
+    return test_file
+
 
 
 STUB_LIST_RESPONSE = {
+    "KeyCount": 4,
     "Contents": [
         {
             "Key": "default/cluster1/kube-system/Namespace/v1/kube-system.yaml",

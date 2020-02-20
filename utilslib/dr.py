@@ -8,7 +8,6 @@ import yaml
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 import utilslib.library as lib
-from utilslib.restore.strategy import RestoreStrategy
 
 class Base(object):
     """Base class that provides a logger
@@ -609,9 +608,6 @@ class Restore(DRBase):
 
         if not strategy:
             raise Exception("you must supply a strategy to use for backup")
-
-        if not issubclass(strategy, RestoreStrategy):
-            raise Exception("strategy used be a subclass of RestoreStrategy")
 
         self.retrieve = Retrieve(bucket_name=bucket_name, *args, **kwargs)
 

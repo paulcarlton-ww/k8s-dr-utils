@@ -1,0 +1,10 @@
+{
+    "apiVersion": "networking.istio.io/v1alpha3",
+    "items": [],
+    "kind": "GatewayList",
+    "metadata": {
+        "continue": "",
+        "resourceVersion": "2097694",
+        "selfLink": "/apis/networking.istio.io/v1alpha3/namespaces/bank-app2/gateways"
+    }
+}
