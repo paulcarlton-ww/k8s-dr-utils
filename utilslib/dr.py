@@ -623,7 +623,14 @@ class Restore(DRBase):
         self.k8s.delete_kind(namespace, kind, name)
 
     @lib.timing_wrapper
-    def restore_namespaces(self, clusterSet, clusterName, namespacesToRestore="*"):
+    def restore_namespaces(self, clusterSet, clusterName, namespacesToRestore):
+        if not clusterSet:
+            raise Exception("you must supply a cluster set")
+        if not clusterName:
+            raise Exception("you must supply a cluster name")
+        if not namespacesToRestore:
+            raise Exception("you must supply namespaces to restore, or use '*' for all")
+
         namespace = []
         num_processed = 0
         for namespace in self.retrieve.get_s3_namespaces(clusterSet, clusterName):

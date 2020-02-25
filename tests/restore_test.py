@@ -168,18 +168,18 @@ def test_restore_all_namespaces(s3_stub, mocker, datadir):
         expected_params={'Bucket': bucket_name, 'Prefix': 'default/cluster1/app1/VirtualService'},
         service_response=STUB_LIST_RESPONSE_EMPTY
     )
-    # s3_stub.add_response(
-    #     'list_objects_v2',
-    #     expected_params={'Bucket': bucket_name, 'Prefix': 'default/cluster1/app1/Namespace'},
-    #     service_response=STUB_LIST_RESPONSE_EMPTY
-    # )
+        # s3_stub.add_response(
+        #     'list_objects_v2',
+        #     expected_params={'Bucket': bucket_name, 'Prefix': 'default/cluster1/app1/Namespace'},
+        #     service_response=STUB_LIST_RESPONSE_EMPTY
+        # )
 
     s3_stub.activate()
 
     strategy = NullStrategy(cluster_name)
 
     restore = Restore(bucket_name,strategy,client=s3_stub.client,cluster_set=cluster_set, cluster_name=cluster_name, kube_config=datadir.join('kubeconfig').strpath)
-    num_processed = restore.restore_namespaces(cluster_set, cluster_name)
+    num_processed = restore.restore_namespaces(cluster_set, cluster_name, "*")
     assert num_processed == 2
 
 def test_restore_single_namespaces(s3_stub, mocker, datadir):
