@@ -32,11 +32,12 @@ class RestoreStrategy(Base):
 class KubectlRestoreStrategy(RestoreStrategy):
     """Restore strategy that uses kubectl"""
 
-    def __init__(self, cluster_name, kubectl_path, temp_folder=tempfile.gettempdir(), dry_run=False):
+    def __init__(self, cluster_name, kubectl_path, kubeconfig='', temp_folder=tempfile.gettempdir(), dry_run=False):
         super().__init__(cluster_name)
         self.kubectl_path = kubectl_path
         self.temp_folder = temp_folder
         self.dry_run = dry_run
+        self.kubeconfig = kubeconfig
         self._output_file = None
         self._filename = None
 
@@ -60,6 +61,9 @@ class KubectlRestoreStrategy(RestoreStrategy):
         command = "{} apply -f {}".format(self.kubectl_path, self._filename)
         if self.dry_run:
             command += " --dry-run"
+        if len(self.kubeconfig) > 0:
+            command += " --kubeconfig="
+            command += self.kubeconfig
         lib.log.debug("kubectl command: %s", command)
 
         lib.log.info("Applying file %s using kubectl", self._filename)
