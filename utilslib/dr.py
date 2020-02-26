@@ -57,7 +57,10 @@ class S3(Base):
         if 'client' in kwargs:
             self.client = kwargs.get("client")
         else:
-            kube_config = Config(connect_timeout=5, retries={'max_attempts': 0})
+            read_timout = kwargs["read_timeout"] if "read_timeout" in kwargs else 60
+            connect_timout = kwargs["connect_timeout"] if "connect_timeout" in kwargs else 5
+
+            kube_config = Config(connect_timeout=connect_timout, read_timeout=read_timout, retries={'max_attempts': 0})
             self.client = boto3.client('s3', config=kube_config)
 
         self.bucket_name = kwargs.get("bucket_name", None)
