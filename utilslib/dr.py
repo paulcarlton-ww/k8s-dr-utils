@@ -1,6 +1,7 @@
 """
 This module contains DR classes
 """
+from string import Template
 import boto3
 import boto3.s3
 from botocore.config import Config
@@ -420,7 +421,9 @@ class DRBase(Base):
 
     def __init__(self, *args, **kwargs):
         super(DRBase, self).__init__(*args, **kwargs)
-        lib.log.debug("Backup init", extra=dict(**kwargs))
+        lib.log.debug("DRBase init", extra=dict(**kwargs))
+
+        self.prefix = kwargs["prefix"] if "prefix" in kwargs else ''
 
         self.k8s = K8s(*args, **kwargs)
 
@@ -446,11 +449,24 @@ class DRBase(Base):
         Returns:
             str -- a formatted key
         """
+
         key = "{}/{}/{}/{}/{}/{}.yaml".format(self.k8s.cluster_info["cluster.set"],
                                               self.k8s.cluster_info["cluster.name"],
                                               namespace,
-                                              kind, api_version.replace("/", " "), name)
+                                              kind, api_version.replace("/", "_"), name)
+
+        if len(self.prefix) > 0:
+            template = Template(self.prefix)
+            config_values = self._get_template_values()
+            result = template.substitute(**config_values)
+            return "{}/{}".format(result, key)
+
         return key
+
+    def _get_template_values(self):
+        items = {k.replace(".", "_"):v for (k,v) in self.k8s.cluster_info.items()}
+
+        return items
 
 class Backup(DRBase):
     """Backup Kubernetes to S3"""
