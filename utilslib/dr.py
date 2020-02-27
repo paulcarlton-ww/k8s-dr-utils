@@ -146,18 +146,6 @@ class Retrieve(S3):
 
     @lib.timing_wrapper
     @lib.retry_wrapper
-    def get_s3_namespaces(self, clusterset, clustername):
-        """
-        retrieve namespace names for provided cluster name prefix.
-
-        :param clustername: the name of the cluster to get the namespaces for
-        """
-        keys = self.get_bucket_keys("{}/{}".format(clusterset, clustername))
-        namespaces = list(map(lambda k: k.split('/')[2], keys))
-        return list(dict.fromkeys(namespaces))
-
-    @lib.timing_wrapper
-    @lib.retry_wrapper
     def get_bucket_keys(self, prefix):
         """
         retrieve items in an S3 bucket with the provided prefix.
@@ -436,6 +424,34 @@ class DRBase(Base):
             return True
         return False
 
+    def get_s3_namespaces_path(self, clusterset, clustername):
+        """Creates the S3 path for querying namespaces
+
+        Arguments:
+            clusterset {str} -- the name of the clusterset
+            clustername {str} -- the cluster name
+        """
+        key = "{}/{}".format(clusterset, clustername)
+        if len(self.prefix) == 0:
+            return key
+        result = self.untemplated_prefix()
+        return "{}/{}".format(result, key)
+
+    def get_s3_namespace_path(self, clusterset, clustername, namespace):
+        """Create the S3 path for a namespace
+        
+        Arguments:
+            clusterset {str} -- the name of the clusterset
+            clustername {str} -- the cluster name
+            namespace {str} -- the namespace
+        """
+        key = "{}/{}/{}".format(clusterset, clustername, namespace)
+        if len(self.prefix) == 0:
+            return key
+        result = self.untemplated_prefix()
+        return "{}/{}".format(result, key)
+
+
     def create_s3_key(self, namespace, kind, api_version, name):
         """Create the key in S3 for a resource
 
@@ -456,12 +472,25 @@ class DRBase(Base):
                                               kind, api_version.replace("/", "_"), name)
 
         if len(self.prefix) > 0:
-            template = Template(self.prefix)
-            config_values = self._get_template_values()
-            result = template.substitute(**config_values)
+            result = self.untemplated_prefix()
             return "{}/{}".format(result, key)
 
         return key
+
+    def untemplated_prefix(self):
+        if len(self.prefix) == 0:
+            return self.prefix
+
+        template = Template(self.prefix)
+        config_values = self._get_template_values()
+        return  template.substitute(**config_values)
+
+    def remove_prefix_from_key(self, key):
+        if len(self.prefix) == 0:
+            return key
+
+        temp_pre = self.untemplated_prefix()
+        return key.replace(temp_pre + "/", "")
 
     def _get_template_values(self):
         items = {k.replace(".", "_"):v for (k,v) in self.k8s.cluster_info.items()}
@@ -587,7 +616,7 @@ class Backup(DRBase):
         """
         keys_deleted = []
 
-        prefix = "{}/{}/{}".format(self.k8s.cluster_info["cluster.set"],self.k8s.cluster_info["cluster.name"], namespace)
+        prefix = self.get_s3_namespace_path(self.k8s.cluster_info["cluster.set"], self.k8s.cluster_info["cluster.name"], namespace)
         for key in self.retrieve.get_bucket_keys(prefix):
             if key not in existing_keys:
                 lib.log.info("key {} doesn't exist in k8s, deleting from s3".format(key))
@@ -642,6 +671,24 @@ class Restore(DRBase):
         self.k8s.delete_kind(namespace, kind, name)
 
     @lib.timing_wrapper
+    @lib.retry_wrapper
+    def get_s3_namespaces(self, path):
+        """
+        retrieve namespace names for provided cluster name prefix.
+
+        :param path: the path to root of the namespaces
+        """
+        namespace_index = 2
+        keys = self.retrieve.get_bucket_keys(path)
+        if len(self.prefix) > 0:
+            pre = self.untemplated_prefix()
+            num_separators = pre.count("/")
+            namespace_index += (num_separators + 1)
+
+        namespaces = list(map(lambda k: k.split('/')[namespace_index], keys))
+        return list(dict.fromkeys(namespaces))
+
+    @lib.timing_wrapper
     def restore_namespaces(self, clusterSet, clusterName, namespacesToRestore):
         if not clusterSet:
             raise Exception("you must supply a cluster set")
@@ -652,7 +699,9 @@ class Restore(DRBase):
 
         namespace = []
         num_processed = 0
-        for namespace in self.retrieve.get_s3_namespaces(clusterSet, clusterName):
+        ns_path = self.get_s3_namespaces_path(clusterSet, clusterName)
+
+        for namespace in self.get_s3_namespaces(ns_path):
             if namespacesToRestore != "*" and namespace not in namespacesToRestore:
                 lib.log.info("skipping namespace: %s", namespace)
                 continue
@@ -662,10 +711,11 @@ class Restore(DRBase):
 
             try:
                 for kind in Restore.kind_order:
-                    prefix = "{}/{}/{}/{}".format(clusterSet, clusterName, namespace, kind)
+                    prefix = "{}/{}/{}".format(ns_path, namespace, kind)
 
                     for key in self.retrieve.get_bucket_keys(prefix):
-                        _, _, _, _, name = S3.parse_key(key)
+                        unprefixed_key = self.remove_prefix_from_key(key)
+                        _, _, _, _, name = S3.parse_key(unprefixed_key)
                         if self.exclude_check(namespace, kind, name):
                             lib.log.info("skipping: %s/%s in namespace %s", kind, name, namespace)
                             continue
