@@ -279,6 +279,107 @@ def test_restore_single_namespaces(s3_stub, mocker, datadir):
 
     assert num_processed == 1
 
+def test_restore_single_namespaces_with_prefix(s3_stub, mocker, datadir):
+    bucket_name = 'test-bucket'
+    namespace = 'kube-system'
+    cluster_name = 'cluster2'
+    cluster_set = 'default'
+    prefix = 'cluster2/application-backups'
+
+    patched = mocker.patch("kubernetes.client.apis.core_v1_api.CoreV1Api.read_namespaced_config_map", autospec=True)
+    patched.return_value = create_response_data(datadir.join('clusterdata.json').strpath, 'V1ConfigMap')
+
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': "cluster2/application-backups/default/cluster2"},
+        service_response=STUB_LIST_RESPONSE_MULTINS_PREFIX
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'cluster2/application-backups/default/cluster2/kube-system/Namespace'},
+        service_response=STUB_LIST_RESPONSE_KS_NS_PREFIX
+    )
+
+    body = read_file(datadir.join('namespace.json').strpath)
+    response_stream = StreamingBody(
+        io.BytesIO(body.encode()),
+        len(body)
+    )
+    s3_stub.add_response(
+        'get_object',
+        expected_params={'Bucket': bucket_name, 'Key': 'cluster2/application-backups/default/cluster2/kube-system/Namespace/v1/kube-system.yaml'},
+        service_response={'Body': response_stream}
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'cluster2/application-backups/default/cluster2/kube-system/LimitRange'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'cluster2/application-backups/default/cluster2/kube-system/ResourceQuota'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'cluster2/application-backups/default/cluster2/kube-system/ConfigMap'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'cluster2/application-backups/default/cluster2/kube-system/Secret'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'cluster2/application-backups/default/cluster2/kube-system/Service'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'cluster2/application-backups/default/cluster2/kube-system/Role'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'cluster2/application-backups/default/cluster2/kube-system/ServiceAccount'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'cluster2/application-backups/default/cluster2/kube-system/RoleBinding'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'cluster2/application-backups/default/cluster2/kube-system/HorizontalPodAutoscaler'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'cluster2/application-backups/default/cluster2/kube-system/Deployment'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'cluster2/application-backups/default/cluster2/kube-system/Gateway'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+    s3_stub.add_response(
+        'list_objects_v2',
+        expected_params={'Bucket': bucket_name, 'Prefix': 'cluster2/application-backups/default/cluster2/kube-system/VirtualService'},
+        service_response=STUB_LIST_RESPONSE_EMPTY
+    )
+
+    s3_stub.activate()
+
+    strategy = NullStrategy(cluster_name)
+
+    restore = Restore(bucket_name,strategy, client=s3_stub.client, kube_config=datadir.join('kubeconfig').strpath, prefix=prefix)
+    num_processed = restore.restore_namespaces(cluster_set, cluster_name, namespace)
+
+    assert num_processed == 1
+
 
 STUB_LIST_RESPONSE_MULTINS = {
     "KeyCount": 2,
@@ -300,6 +401,26 @@ STUB_LIST_RESPONSE_MULTINS = {
     ]
 }
 
+STUB_LIST_RESPONSE_MULTINS_PREFIX = {
+    "KeyCount": 2,
+    "Contents": [
+        {
+            "Key": "cluster2/application-backups/default/cluster2/kube-system/Namespace/v1/kube-system.yaml",
+            "LastModified": "2020-02-06T11:48:37.000Z",
+            "ETag": "2537abc",
+            "Size": 1234,
+            "StorageClass": "STANDARD"
+        },
+        {
+            "Key": "cluster2/application-backups/default/cluster1/app1/Namespace/v1/app1.yaml",
+            "LastModified": "2020-02-06T11:48:37.000Z",
+            "ETag": "126abc",
+            "Size": 4321,
+            "StorageClass": "STANDARD"
+        }
+    ]
+}
+
 STUB_LIST_RESPONSE_KS_NS = {
     "KeyCount": 1,
     "Contents": [
@@ -313,11 +434,37 @@ STUB_LIST_RESPONSE_KS_NS = {
     ]
 }
 
+STUB_LIST_RESPONSE_KS_NS_PREFIX = {
+    "KeyCount": 1,
+    "Contents": [
+        {
+            "Key": "cluster2/application-backups/default/cluster2/kube-system/Namespace/v1/kube-system.yaml",
+            "LastModified": "2020-02-06T11:48:37.000Z",
+            "ETag": "2537abc",
+            "Size": 1234,
+            "StorageClass": "STANDARD"
+        }
+    ]
+}
+
 STUB_LIST_RESPONSE_APP_NS = {
     "KeyCount": 1,
     "Contents": [
         {
             "Key": "default/cluster1/app1/Namespace/v1/app1.yaml",
+            "LastModified": "2020-02-06T11:48:37.000Z",
+            "ETag": "126abc",
+            "Size": 4321,
+            "StorageClass": "STANDARD"
+        }
+    ]
+}
+
+STUB_LIST_RESPONSE_APP_NS_PREFIX = {
+    "KeyCount": 1,
+    "Contents": [
+        {
+            "Key": "cluster2/application-backups/default/cluster2/app1/Namespace/v1/app1.yaml",
             "LastModified": "2020-02-06T11:48:37.000Z",
             "ETag": "126abc",
             "Size": 4321,

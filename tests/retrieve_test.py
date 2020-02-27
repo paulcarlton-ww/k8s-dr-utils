@@ -58,25 +58,6 @@ def test_get_bucket_item(s3_stub):
 
     assert result == body
 
-def test_get_s3_namespaces(s3_stub):
-    clustername = 'cluster2'
-    clusterset = 'default'
-    bucket_name = 'test-bucket'
-
-    s3_stub.add_response(
-        'list_objects_v2',
-        expected_params={'Bucket': bucket_name, 'Prefix': "{}/{}".format(clusterset, clustername)},
-        service_response=STUB_LIST_RESPONSE
-    )
-    s3_stub.activate()
-
-    retrieve = Retrieve(client=s3_stub.client, bucket_name=bucket_name)
-    result = retrieve.get_s3_namespaces(clusterset, clustername)
-
-    assert len(result) == 2
-    assert result[0] == "namespace1"
-    assert result[1] == "namespace2"
-
 STUB_NO_CONTENTS = {
     "KeyCount": 0,
     "Contents": []
